@@ -17,28 +17,43 @@ cd server
 npm install
 FACEBOOK_APP_ID=... \
 FACEBOOK_APP_SECRET=... \
-FACEBOOK_REDIRECT_URI=http://localhost:8080/auth/facebook/callback \
-FRONTEND_ORIGIN=http://localhost:4173 \
+FACEBOOK_REDIRECT_URI=https://YOUR_API_DOMAIN/auth/facebook/callback \
+FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN \
 SESSION_SECRET=replace_me \
 npm start
 ```
 
+## Facebook OAuth без localhost (production)
+
+Чтобы вход открывался через официальный сайт Facebook (а не локальный callback), укажите в Meta Developers:
+
+- **Valid OAuth Redirect URIs**: `https://YOUR_API_DOMAIN/auth/facebook/callback`
+- **App Domains**: `YOUR_API_DOMAIN`, `YOUR_FRONTEND_DOMAIN`
+
+И на фронтенде задайте `window.__AUTH_API_BASE__` (например, в `index.html` перед `app.js`) на ваш backend-домен.
+
+Пример:
+
+```html
+<script>
+  window.__AUTH_API_BASE__ = 'https://api.yourdomain.com';
+</script>
+<script src="app.js"></script>
+```
+
 ## Что исправлено
 
-- Регистрация теперь рабочая: сначала отправка кода подтверждения (`/auth/register/request-code`), потом подтверждение (`/auth/register/confirm`).
+- Регистрация рабочая: сначала отправка кода подтверждения (`/auth/register/request-code`), потом подтверждение (`/auth/register/confirm`).
 - Код подтверждения можно отправлять на телефон или email (в демо выводится в лог сервера и возвращается как `dev_code`).
-- Вход сделан не "на один раз": используется долгоживущая signed cookie (`nm_auth`, по умолчанию 30 дней).
-- Реальный вход через сайт Facebook OAuth сохранён.
-- Добавлен поиск пользователя по номеру (`/users/by-phone`) для старта чата с реальными зарегистрированными пользователями вашего сервиса.
+- Вход сделан не "на один раз": долгоживущая signed cookie (`nm_auth`, по умолчанию 30 дней).
+- Реальный вход через официальный Facebook OAuth сохранён.
+- Поиск пользователя по номеру (`/users/by-phone`) для старта чата между зарегистрированными пользователями вашего сервиса.
 
 ## API
 
 - `POST /auth/register/request-code`
-  - body: `username`, `phone`, `email?`, `password`, `channel` (`phone|email`)
 - `POST /auth/register/confirm`
-  - body: `channel`, `target`, `code`
 - `POST /auth/login`
-  - body: `username?`, `phone?`, `email?`, `password`
 - `GET /auth/facebook/start`
 - `GET /auth/facebook/callback`
 - `GET /me`
@@ -47,4 +62,4 @@ npm start
 
 ## Важно
 
-Через обычный Facebook Login API нельзя легально получить произвольных "друзей по номеру телефона". В этом MVP корректно реализовано общение между пользователями, зарегистрированными в вашем приложении по номеру телефона.
+Через обычный Facebook Login API нельзя превратить это приложение в официальный Facebook Messenger и переписываться с произвольными пользователями Facebook. Этот MVP даёт корректный OAuth-вход через Facebook и общение между пользователями, зарегистрированными в вашем сервисе.

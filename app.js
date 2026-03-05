@@ -1,4 +1,4 @@
-const AUTH_API_BASE = 'http://localhost:8080';
+const AUTH_API_BASE = window.__AUTH_API_BASE__ || `${window.location.origin}`;
 
 const chats = [
   { id: 1, name: 'Alice', avatar: '🦊', messages: [{ from: 'them', text: 'Привет! Давай вечером созвон?' }] },
@@ -31,7 +31,7 @@ function renderAll(){ applyTheme(); applyTranslations(); renderAuth(); renderCha
 
 async function fetchSessionUser(){ try{ const r=await fetch(`${AUTH_API_BASE}/me`,{credentials:'include'}); if(!r.ok) return; const d=await r.json(); state.user=d.user||null; if(state.user?.name){ profile.nickname=state.user.name; saveProfile(); } renderAll(); }catch{} }
 function handleOauthErrorsInUrl(){ const u=new URL(window.location.href); const err=u.searchParams.get('error'); if(err){ alert(`${t('authError')} ${u.searchParams.get('error_description')||err}`); ['error','error_description','error_reason'].forEach(k=>u.searchParams.delete(k)); history.replaceState({},'',u.toString()); }}
-function startFacebookOAuth(){ const returnTo=`${location.origin}${location.pathname}`; location.href=`${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`; }
+function startFacebookOAuth(){ const returnTo=`${window.location.origin}${window.location.pathname}`; window.location.href=`${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`; }
 
 function readAuthFields(){
   return {
