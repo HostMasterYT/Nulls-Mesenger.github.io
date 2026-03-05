@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nulls Messenger</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="sidebar glass">
+        <header class="sidebar__header">
+          <div>
+            <h1>Nulls</h1>
+            <p id="sidebarSubtitle">Ваши чаты</p>
+          </div>
+          <button id="newChatBtn" class="icon-btn" title="Новый чат">＋</button>
+        </header>
+
+        <section class="auth-card">
+          <div id="authState" class="auth-state">Не авторизованы</div>
+          <div class="social-grid">
+            <button id="facebookLoginBtn" class="social-btn social-btn--facebook" type="button">Facebook</button>
+          </div>
+          <div class="auth-actions">
+            <button id="socialLogoutBtn" class="ghost small" type="button">Выйти</button>
+          </div>
+          <small id="authHint">Сейчас подключен только Facebook (demo-flow без сервера).</small>
+        </section>
+
+        <label class="search">
+          <span>🔎</span>
+          <input type="text" id="chatSearch" placeholder="Поиск..." />
+        </label>
+
+        <nav id="chatList" class="chat-list"></nav>
+      </aside>
+
+      <main class="chat glass">
+        <header class="chat__header">
+          <div class="chat-user" id="chatUser"></div>
+          <div class="actions">
+            <button id="voiceCallBtn" class="icon-btn" title="Голосовой звонок">📞</button>
+            <button id="videoCallBtn" class="icon-btn" title="Видеозвонок">🎥</button>
+            <button id="openProfileBtn" class="icon-btn" title="Профиль">⚙️</button>
+          </div>
+        </header>
+
+        <section id="messages" class="messages"></section>
+
+        <form id="messageForm" class="composer">
+          <input id="messageInput" type="text" placeholder="Напишите сообщение..." autocomplete="off" />
+          <button id="sendBtn" type="submit" class="send-btn">Отправить</button>
+        </form>
+      </main>
+    </div>
+
+    <dialog id="profileDialog" class="modal glass">
+      <form method="dialog" class="modal__content" id="profileForm">
+        <h2 id="settingsTitle">Настройки профиля</h2>
+        <label>
+          <span id="labelNickname">Ник</span>
+          <input type="text" id="profileNickname" maxlength="24" />
+        </label>
+        <label>
+          <span id="labelStatus">Статус</span>
+          <input type="text" id="profileStatus" maxlength="40" />
+        </label>
+        <label>
+          <span id="labelAvatar">Аватар (эмодзи)</span>
+          <input type="text" id="profileAvatar" maxlength="2" />
+        </label>
+        <label>
+          <span id="labelTheme">Тема</span>
+          <select id="themeMode">
+            <option value="dark">Черная</option>
+            <option value="light">Белая</option>
+          </select>
+        </label>
+        <label>
+          <span id="labelLanguage">Язык</span>
+          <select id="languageSelect">
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+            <option value="pt">Português</option>
+          </select>
+        </label>
+
+        <menu class="modal__actions">
+          <button id="cancelBtn" value="cancel" class="ghost">Отмена</button>
+          <button id="saveProfileBtn" value="default">Сохранить</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="callDialog" class="modal glass">
+      <form method="dialog" class="modal__content call-dialog">
+        <h2 id="callTitle">Звонок</h2>
+        <p id="callText"></p>
+        <div class="call-visual">
+          <div id="callAvatar" class="call-avatar"></div>
+          <span class="pulse"></span>
+        </div>
+        <menu class="modal__actions">
+          <button id="endCallBtn" value="cancel" class="danger">Завершить</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
