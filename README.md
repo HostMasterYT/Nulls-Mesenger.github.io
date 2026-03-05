@@ -1,6 +1,6 @@
 # Nulls Messenger (UI MVP)
 
-Локальный прототип мессенджера: чаты, сообщения, звонки, настройки профиля (ник, аватар, тема, язык) и **реальный Facebook OAuth flow через backend**.
+Локальный прототип мессенджера: чаты, сообщения, звонки, настройки профиля и авторизация.
 
 ## Запуск фронтенда
 
@@ -10,7 +10,7 @@ python3 -m http.server 4173
 
 Откройте: <http://localhost:4173>
 
-## Запуск backend для Facebook OAuth
+## Запуск backend
 
 ```bash
 cd server
@@ -22,33 +22,15 @@ FRONTEND_ORIGIN=http://localhost:4173 \
 npm start
 ```
 
-Backend поднимается на `http://localhost:8080`.
+## Что теперь работает
 
-## Что реализовано правильно по OAuth (Facebook v25.0)
+- Реальный вход через сайт Facebook OAuth (`/auth/facebook/start` -> callback).
+- Вход/регистрация по пользователю в вашем backend:
+  - `POST /auth/register` (`username`, `phone`, `password`)
+  - `POST /auth/login` (`username`, `phone`, `password`)
+- Поиск пользователя по телефону для старта чата:
+  - `GET /users/by-phone?phone=...` (требует активную сессию)
 
-1. Редирект на:
-   - `https://www.facebook.com/v25.0/dialog/oauth`
-   - параметры: `client_id`, `redirect_uri`, `state`, `response_type=code`, `scope=email,public_profile`
-2. Обработка ошибок callback:
-   - `error_reason=user_denied`
-   - `error=access_denied`
-   - `error_description=...`
-3. Обмен `code` на токен:
-   - `GET https://graph.facebook.com/v25.0/oauth/access_token?...`
-4. Валидация токена:
-   - `GET https://graph.facebook.com/debug_token?...`
-5. Получение профиля:
-   - `GET https://graph.facebook.com/me?fields=id,name,email,picture...`
-6. Создание серверной сессии и `httpOnly` cookie.
+## Важно про "друзей Facebook по номеру"
 
-## Endpoints backend
-
-- `GET /auth/facebook/start`
-- `GET /auth/facebook/callback`
-- `GET /me`
-- `POST /auth/logout`
-
-## Важно
-
-- Для production поставьте `secure: true` cookie и HTTPS.
-- Храните `FACEBOOK_APP_SECRET` только на сервере.
+Напрямую получить список друзей Facebook и писать им "по номеру телефона" через обычный Login API нельзя: это ограничено политиками Meta и требует отдельных разрешений/продуктов. В этом MVP реализован корректный путь для **вашего** сервера и **ваших** пользователей (зарегистрированных в приложении по номеру).
