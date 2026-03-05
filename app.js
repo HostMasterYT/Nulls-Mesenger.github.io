@@ -1,3 +1,5 @@
+const AUTH_API_BASE = 'http://localhost:8080';
+
 const chats = [
   {
     id: 1,
@@ -31,36 +33,36 @@ const i18n = {
     settingsTitle: 'Настройки профиля', nickname: 'Ник', status: 'Статус', avatar: 'Аватар (эмодзи)',
     theme: 'Тема', language: 'Язык', cancel: 'Отмена', save: 'Сохранить',
     dark: 'Черная', light: 'Белая', voice: 'Голосовой звонок', video: 'Видеозвонок', profile: 'Профиль',
-    notAuth: 'Не авторизованы', logout: 'Выйти', authHint: 'Сейчас подключен только Facebook (demo-flow без сервера).',
+    notAuth: 'Не авторизованы', logout: 'Выйти', authHint: 'Реальный вход через Facebook OAuth (backend на :8080).',
     writeMessage: 'Напишите сообщение...', newChat: 'Новый чат',
     endCall: 'Завершить', call: 'Звонок', connecting: 'Соединение...',
-    enterFbName: 'Введите имя для регистрации через Facebook:',
     enterChatName: 'Имя нового чата:', accepted: 'Понял, принято ✅',
     online: 'Онлайн', noMessages: 'Нет сообщений',
+    authError: 'Ошибка авторизации Facebook.',
   },
   en: {
     sidebarSubtitle: 'Your chats', search: 'Search...', send: 'Send',
     settingsTitle: 'Profile settings', nickname: 'Nickname', status: 'Status', avatar: 'Avatar (emoji)',
     theme: 'Theme', language: 'Language', cancel: 'Cancel', save: 'Save',
     dark: 'Dark', light: 'Light', voice: 'Voice call', video: 'Video call', profile: 'Profile',
-    notAuth: 'Not signed in', logout: 'Logout', authHint: 'Only Facebook is enabled now (serverless demo flow).',
+    notAuth: 'Not signed in', logout: 'Logout', authHint: 'Real Facebook OAuth login (backend at :8080).',
     writeMessage: 'Type a message...', newChat: 'New chat',
     endCall: 'End call', call: 'Call', connecting: 'Connecting...',
-    enterFbName: 'Enter a name for Facebook signup:',
     enterChatName: 'New chat name:', accepted: 'Got it ✅',
     online: 'Online', noMessages: 'No messages',
+    authError: 'Facebook authorization error.',
   },
   pt: {
     sidebarSubtitle: 'Seus chats', search: 'Pesquisar...', send: 'Enviar',
     settingsTitle: 'Configurações de perfil', nickname: 'Apelido', status: 'Status', avatar: 'Avatar (emoji)',
     theme: 'Tema', language: 'Idioma', cancel: 'Cancelar', save: 'Salvar',
     dark: 'Escuro', light: 'Claro', voice: 'Chamada de voz', video: 'Chamada de vídeo', profile: 'Perfil',
-    notAuth: 'Não autenticado', logout: 'Sair', authHint: 'Apenas Facebook está ativo agora (demo sem servidor).',
+    notAuth: 'Não autenticado', logout: 'Sair', authHint: 'Login real via Facebook OAuth (backend em :8080).',
     writeMessage: 'Digite uma mensagem...', newChat: 'Novo chat',
     endCall: 'Encerrar', call: 'Chamada', connecting: 'Conectando...',
-    enterFbName: 'Digite um nome para cadastro via Facebook:',
     enterChatName: 'Nome do novo chat:', accepted: 'Entendido ✅',
     online: 'Online', noMessages: 'Sem mensagens',
+    authError: 'Erro de autorização do Facebook.',
   },
 };
 
@@ -74,9 +76,8 @@ const defaultProfile = {
 
 const savedProfile = JSON.parse(localStorage.getItem('nm-profile') || 'null');
 const profile = { ...defaultProfile, ...(savedProfile || {}) };
-const authUser = JSON.parse(localStorage.getItem('nm-social-user') || 'null');
 
-const state = { activeChatId: chats[0].id, filter: '', user: authUser };
+const state = { activeChatId: chats[0].id, filter: '', user: null };
 
 const el = {
   chatList: document.getElementById('chatList'), chatUser: document.getElementById('chatUser'),
@@ -131,26 +132,36 @@ function applyTranslations() {
 
   el.themeMode.options[0].textContent = t('dark');
   el.themeMode.options[1].textContent = t('light');
-  el.languageSelect.options[0].textContent = 'Русский';
-  el.languageSelect.options[1].textContent = 'English';
-  el.languageSelect.options[2].textContent = 'Português';
 }
 
 function saveProfile() {
   localStorage.setItem('nm-profile', JSON.stringify(profile));
 }
 
-function saveSocialUser(user) {
-  state.user = user;
-  localStorage.setItem('nm-social-user', JSON.stringify(user));
-  profile.nickname = user.name;
-  saveProfile();
-  renderAll();
+async function fetchSessionUser() {
+  try {
+    const response = await fetch(`${AUTH_API_BASE}/me`, { credentials: 'include' });
+    if (!response.ok) {
+      state.user = null;
+      renderAuth();
+      return;
+    }
+    const payload = await response.json();
+    state.user = payload.user || null;
+    if (state.user?.name) {
+      profile.nickname = state.user.name;
+      saveProfile();
+    }
+    renderAll();
+  } catch {
+    state.user = null;
+    renderAuth();
+  }
 }
 
 function renderAuth() {
   if (state.user) {
-    el.authState.textContent = `${state.user.provider}: ${state.user.name}`;
+    el.authState.textContent = `${state.user.provider || 'Facebook'}: ${state.user.name}`;
     el.socialLogoutBtn.disabled = false;
   } else {
     el.authState.textContent = t('notAuth');
@@ -158,10 +169,23 @@ function renderAuth() {
   }
 }
 
-function loginWithFacebookDemo() {
-  const name = prompt(t('enterFbName'));
-  if (!name) return;
-  saveSocialUser({ provider: 'Facebook', name: name.trim() });
+function handleOauthErrorsInUrl() {
+  const url = new URL(window.location.href);
+  const error = url.searchParams.get('error');
+  const errorDescription = url.searchParams.get('error_description');
+  if (error) {
+    alert(`${t('authError')} ${errorDescription || error}`);
+    url.searchParams.delete('error');
+    url.searchParams.delete('error_description');
+    url.searchParams.delete('error_reason');
+    window.history.replaceState({}, '', url.toString());
+  }
+}
+
+function startFacebookOAuth() {
+  const returnTo = `${window.location.origin}${window.location.pathname}`;
+  const loginUrl = `${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`;
+  window.location.href = loginUrl;
 }
 
 function renderChats() {
@@ -264,11 +288,17 @@ el.newChatBtn.addEventListener('click', () => {
   renderAll();
 });
 
-el.facebookLoginBtn.addEventListener('click', loginWithFacebookDemo);
-el.socialLogoutBtn.addEventListener('click', () => {
+el.facebookLoginBtn.addEventListener('click', startFacebookOAuth);
+el.socialLogoutBtn.addEventListener('click', async () => {
+  try {
+    await fetch(`${AUTH_API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+  } catch {
+    // ignore network errors on logout
+  }
   state.user = null;
-  localStorage.removeItem('nm-social-user');
   renderAuth();
 });
 
+handleOauthErrorsInUrl();
 renderAll();
+fetchSessionUser();

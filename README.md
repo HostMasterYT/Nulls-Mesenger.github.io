@@ -1,41 +1,54 @@
 # Nulls Messenger (UI MVP)
 
-Локальный прототип мессенджера без сервера: чаты, сообщения, звонки, регистрация через Facebook (demo) и настройки профиля.
+Локальный прототип мессенджера: чаты, сообщения, звонки, настройки профиля (ник, аватар, тема, язык) и **реальный Facebook OAuth flow через backend**.
 
-## Запуск
+## Запуск фронтенда
 
 ```bash
 python3 -m http.server 4173
 ```
 
-Откройте в браузере: <http://localhost:4173>
+Откройте: <http://localhost:4173>
 
-## Что уже можно настроить
+## Запуск backend для Facebook OAuth
 
-- Ник и аватар профиля.
-- Тема интерфейса: **черная** / **белая**.
-- Язык интерфейса: **русский**, **английский**, **португальский**.
+```bash
+cd server
+npm install
+FACEBOOK_APP_ID=... \
+FACEBOOK_APP_SECRET=... \
+FACEBOOK_REDIRECT_URI=http://localhost:8080/auth/facebook/callback \
+FRONTEND_ORIGIN=http://localhost:4173 \
+npm start
+```
 
-## Регистрация / вход
+Backend поднимается на `http://localhost:8080`.
 
-Сейчас в MVP включена только регистрация через **Facebook** в demo-режиме (без backend): ввод имени через prompt и сохранение локально в `localStorage`.
+## Что реализовано правильно по OAuth (Facebook v25.0)
 
-## Как добавить реальную регистрацию через Facebook (с сервером)
+1. Редирект на:
+   - `https://www.facebook.com/v25.0/dialog/oauth`
+   - параметры: `client_id`, `redirect_uri`, `state`, `response_type=code`, `scope=email,public_profile`
+2. Обработка ошибок callback:
+   - `error_reason=user_denied`
+   - `error=access_denied`
+   - `error_description=...`
+3. Обмен `code` на токен:
+   - `GET https://graph.facebook.com/v25.0/oauth/access_token?...`
+4. Валидация токена:
+   - `GET https://graph.facebook.com/debug_token?...`
+5. Получение профиля:
+   - `GET https://graph.facebook.com/me?fields=id,name,email,picture...`
+6. Создание серверной сессии и `httpOnly` cookie.
 
-1. Создайте backend (например Node.js + Express) и базу (PostgreSQL).
-2. В [Meta for Developers](https://developers.facebook.com/) создайте приложение и получите:
-   - `FACEBOOK_APP_ID`
-   - `FACEBOOK_APP_SECRET`
-3. На backend реализуйте OAuth callback:
-   - фронт отправляет пользователя на Facebook OAuth URL,
-   - Facebook возвращает `code` в `redirect_uri`,
-   - backend обменивает `code` на access token,
-   - backend получает профиль пользователя и создаёт/находит его в БД.
-4. Backend выдаёт сессию/JWT и возвращает пользователя на фронт.
-5. На фронте замените demo `prompt` на редирект к backend (`/auth/facebook/start`).
+## Endpoints backend
 
-Минимальные backend endpoints:
 - `GET /auth/facebook/start`
 - `GET /auth/facebook/callback`
-- `POST /auth/logout`
 - `GET /me`
+- `POST /auth/logout`
+
+## Важно
+
+- Для production поставьте `secure: true` cookie и HTTPS.
+- Храните `FACEBOOK_APP_SECRET` только на сервере.
