@@ -110,6 +110,14 @@ function consumeOauthState(stateParam) {
   return state;
 }
 
+
+app.get('/auth/providers/status', (_req, res) => {
+  res.json({
+    facebook: { configured: Boolean(FACEBOOK_APP_ID && FACEBOOK_APP_SECRET && FACEBOOK_REDIRECT_URI) },
+    vk: { configured: Boolean(VK_CLIENT_ID && VK_CLIENT_SECRET && VK_REDIRECT_URI) },
+  });
+});
+
 app.post('/auth/register', async (req, res) => {
   const { username, phone, email, password } = req.body || {};
   if (!username || !phone || !password) return res.status(400).json({ error: 'username, phone, password required' });

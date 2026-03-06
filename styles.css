@@ -304,6 +304,30 @@ code { color: #cde0ff; }
   margin: 8px 0 0;
 }
 
+.settings-section {
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.checkbox-line {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-line input {
+  width: auto !important;
+}
+
 .ghost { background: rgba(255, 255, 255, 0.16) !important; }
 .danger { background: #cf3b54 !important; }
 
@@ -343,3 +367,31 @@ code { color: #cde0ff; }
 body[data-theme="light"] { background: linear-gradient(120deg, #e8eefc, #f7faff 60%, #dee8ff); }
 
 .icon-btn:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 24%, var(--surface-strong)); }
+
+.provider-status {
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
+body[data-density="compact"] .chat-item {
+  padding: 8px;
+}
+
+body[data-density="compact"] .messages {
+  gap: 6px;
+  padding: 14px;
+}
+
+body[data-density="compact"] .msg {
+  padding: 8px 10px;
+}
+
+body.blur-previews .chat-item .preview {
+  filter: blur(4px);
+  transition: filter .2s ease;
+}
+
+body.blur-previews .chat-item:hover .preview,
+body.blur-previews .chat-item.active .preview {
+  filter: blur(0);
+}
