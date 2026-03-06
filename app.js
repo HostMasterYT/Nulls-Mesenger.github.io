@@ -1,9 +1,6 @@
 const DEFAULT_LOCAL_API = 'http://localhost:8080';
-const AUTH_API_BASE =
-  window.__AUTH_API_BASE__ ||
-  ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? DEFAULT_LOCAL_API
-    : window.location.origin);
+const AUTH_API_BASE = window.__AUTH_API_BASE__ || DEFAULT_LOCAL_API;
+
 
 const profile = {
   nickname: 'Вы',
@@ -162,12 +159,24 @@ function handleOauthErrorsInUrl() {
   history.replaceState({}, '', u.toString());
 }
 
+
+function ensureApiBaseConfigured() {
+  if (window.__AUTH_API_BASE__) return true;
+  if (window.location.hostname.includes('github.io')) {
+    alert('Для GitHub Pages укажите window.__AUTH_API_BASE__ на ваш backend-домен (иначе OAuth не заработает).');
+    return false;
+  }
+  return true;
+}
+
 function startFacebookOAuth() {
+  if (!ensureApiBaseConfigured()) return;
   const returnTo = `${window.location.origin}${window.location.pathname}`;
   window.location.href = `${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`;
 }
 
 function startVkOAuth() {
+  if (!ensureApiBaseConfigured()) return;
   const returnTo = `${window.location.origin}${window.location.pathname}`;
   window.location.href = `${AUTH_API_BASE}/auth/vk/start?return_to=${encodeURIComponent(returnTo)}`;
 }
