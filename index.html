@@ -13,10 +13,7 @@
     <div class="app" id="app">
       <aside class="sidebar glass">
         <header class="sidebar__header">
-          <div>
-            <h1>Nulls</h1>
-            <p id="sidebarSubtitle">Ваши чаты</p>
-          </div>
+          <div><h1>Nulls</h1><p id="sidebarSubtitle">Ваши чаты</p></div>
           <button id="newChatBtn" class="icon-btn" title="Новый чат">＋</button>
         </header>
 
@@ -37,16 +34,12 @@
             <button id="vkLoginBtn" class="social-btn social-btn--vk" type="button">VK</button>
           </div>
           <small id="oauthProviderStatus" class="provider-status">Проверка OAuth-провайдеров...</small>
-          <div class="auth-actions">
-            <button id="socialLogoutBtn" class="ghost small" type="button">Выйти</button>
-          </div>
+          <small id="apiMetaStatus" class="provider-status">API metadata: loading...</small>
+          <div class="auth-actions"><button id="socialLogoutBtn" class="ghost small" type="button">Выйти</button></div>
           <small id="authHint">Локальный вход + Facebook OAuth + VK OAuth.</small>
         </section>
 
-        <label class="search">
-          <span>🔎</span>
-          <input type="text" id="chatSearch" placeholder="Поиск..." />
-        </label>
+        <label class="search"><span>🔎</span><input type="text" id="chatSearch" placeholder="Поиск..." /></label>
         <nav id="chatList" class="chat-list"></nav>
       </aside>
 
@@ -56,12 +49,12 @@
           <div class="actions">
             <button id="voiceCallBtn" class="icon-btn" title="Голосовой звонок">📞</button>
             <button id="videoCallBtn" class="icon-btn" title="Видеозвонок">🎥</button>
+            <button id="showStatsBtn" class="icon-btn" title="Статистика чата">📊</button>
             <button id="openSettingsBtn" class="icon-btn" title="Настройки">⚙️</button>
           </div>
         </header>
 
         <section id="messages" class="messages"></section>
-
         <form id="messageForm" class="composer">
           <input id="messageInput" type="text" placeholder="Напишите сообщение..." autocomplete="off" />
           <button id="sendBtn" type="submit" class="send-btn">Отправить</button>
@@ -69,45 +62,78 @@
       </main>
     </div>
 
-    <dialog id="settingsDialog" class="modal glass">
+    <dialog id="settingsDialog" class="modal glass settings-modal">
       <form method="dialog" class="modal__content" id="settingsForm">
-        <h2 id="settingsTitle">Настройки</h2>
+        <h2 id="settingsTitle">Огромные настройки</h2>
 
         <section class="settings-section">
           <h3>Профиль</h3>
-          <label><span id="labelNickname">Ник</span><input type="text" id="profileNickname" maxlength="24" /></label>
-          <label><span id="labelStatus">Статус</span><input type="text" id="profileStatus" maxlength="40" /></label>
-          <label><span id="labelAvatar">Аватар (эмодзи)</span><input type="text" id="profileAvatar" maxlength="2" /></label>
+          <label><span>Ник</span><input type="text" id="profileNickname" maxlength="24" /></label>
+          <label><span>Статус</span><input type="text" id="profileStatus" maxlength="40" /></label>
+          <label><span>Аватар (эмодзи)</span><input type="text" id="profileAvatar" maxlength="2" /></label>
+          <label><span>Язык</span><select id="languageSelect"><option value="ru">Русский</option><option value="en">English</option><option value="pt">Português</option></select></label>
         </section>
 
         <section class="settings-section">
           <h3>Внешний вид</h3>
-          <label><span id="labelTheme">Тема</span><select id="themeMode"><option value="dark">Тёмная</option><option value="light">Светлая</option><option value="system">Как в системе</option></select></label>
-          <label><span id="labelAccent">Акцент</span><select id="accentColor"><option value="blue">Blue</option><option value="purple">Purple</option><option value="pink">Pink</option><option value="red">Red</option><option value="orange">Orange</option><option value="green">Green</option></select></label>
-          <label><span id="labelDensity">Плотность интерфейса</span><select id="uiDensity"><option value="comfortable">Обычная</option><option value="compact">Компактная</option></select></label>
-          <label><span id="labelLanguage">Язык</span><select id="languageSelect"><option value="ru">Русский</option><option value="en">English</option><option value="pt">Português</option></select></label>
+          <label><span>Тема</span><select id="themeMode"><option value="dark">Тёмная</option><option value="light">Светлая</option><option value="system">Системная</option></select></label>
+          <label><span>Акцент</span><select id="accentColor"><option value="blue">Blue</option><option value="purple">Purple</option><option value="pink">Pink</option><option value="red">Red</option><option value="orange">Orange</option><option value="green">Green</option></select></label>
+          <label><span>Плотность интерфейса</span><select id="uiDensity"><option value="comfortable">Обычная</option><option value="compact">Компактная</option></select></label>
+          <label><span>Масштаб шрифта (%)</span><input type="number" id="fontScale" min="85" max="130" step="5" /></label>
+          <label class="checkbox-line"><input type="checkbox" id="animationsEnabled" /> Включить анимации</label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Приватность</h3>
+          <label class="checkbox-line"><input type="checkbox" id="privacyHidePhone" /> Скрывать номер телефона</label>
+          <label class="checkbox-line"><input type="checkbox" id="privacyReadReceipts" /> Показывать прочтение</label>
+          <label class="checkbox-line"><input type="checkbox" id="privacyLastSeen" /> Показывать last seen</label>
+          <label class="checkbox-line"><input type="checkbox" id="privacyPreview" /> Показывать превью сообщений</label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Уведомления</h3>
+          <label class="checkbox-line"><input type="checkbox" id="notifSound" /> Звук уведомлений</label>
+          <label class="checkbox-line"><input type="checkbox" id="notifDesktop" /> Desktop-уведомления</label>
+          <label class="checkbox-line"><input type="checkbox" id="notifVibrate" /> Вибрация (mobile)</label>
+          <label class="checkbox-line"><input type="checkbox" id="notifQuietEnabled" /> Тихие часы</label>
+          <label><span>Тихие часы с</span><input type="time" id="notifQuietFrom" /></label>
+          <label><span>Тихие часы до</span><input type="time" id="notifQuietTo" /></label>
         </section>
 
         <section class="settings-section">
           <h3>Защита</h3>
-          <label class="checkbox-line"><input type="checkbox" id="securityPinEnabled" /> Включить PIN-блокировку (демо)</label>
-          <label class="checkbox-line"><input type="checkbox" id="securityHidePhone" /> Скрывать номер телефона в UI</label>
-          <label class="checkbox-line"><input type="checkbox" id="securityLoginAlerts" /> Уведомлять о входе с нового устройства (демо)</label>
-          <label class="checkbox-line"><input type="checkbox" id="securityBiometric" /> Запрашивать биометрию при старте (демо)</label>
-          <label class="checkbox-line"><input type="checkbox" id="securityBlurPreviews" /> Размывать превью сообщений в списке чатов</label>
-          <label>Время сессии
-            <select id="securitySessionTtl">
-              <option value="7">7 дней</option>
-              <option value="30">30 дней</option>
-              <option value="90">90 дней</option>
-            </select>
-          </label>
+          <label class="checkbox-line"><input type="checkbox" id="securityPinEnabled" /> PIN-блокировка (demo)</label>
+          <label class="checkbox-line"><input type="checkbox" id="securityBiometric" /> Биометрия (demo)</label>
+          <label class="checkbox-line"><input type="checkbox" id="securityLoginAlerts" /> Login alerts</label>
+          <label class="checkbox-line"><input type="checkbox" id="securityBlurPreviews" /> Размывать превью чатов</label>
+          <label class="checkbox-line"><input type="checkbox" id="security2faDemo" /> 2FA (demo)</label>
+          <label><span>Автоблокировка (минуты)</span><input type="number" id="securityAutoLock" min="0" max="120" /></label>
+          <label><span>TTL сессии (дней)</span><select id="securitySessionTtl"><option value="7">7 дней</option><option value="30">30 дней</option><option value="90">90 дней</option></select></label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Чаты и сообщения</h3>
+          <label class="checkbox-line"><input type="checkbox" id="chatEnterToSend" /> Enter отправляет сообщение</label>
+          <label class="checkbox-line"><input type="checkbox" id="chatAutoMedia" /> Автозагрузка медиа</label>
+          <label class="checkbox-line"><input type="checkbox" id="chatStickers" /> Стикеры</label>
+          <label class="checkbox-line"><input type="checkbox" id="chatReactions" /> Реакции</label>
+          <label class="checkbox-line"><input type="checkbox" id="chatSpellcheck" /> Проверка орфографии</label>
         </section>
 
         <menu class="modal__actions">
           <button id="cancelBtn" value="cancel" class="ghost">Отмена</button>
+          <button id="refreshSessionBtn" type="button" class="ghost">Refresh Session</button>
           <button id="saveSettingsBtn" value="default">Сохранить</button>
         </menu>
+      </form>
+    </dialog>
+
+    <dialog id="statsDialog" class="modal glass">
+      <form method="dialog" class="modal__content">
+        <h2>Статистика чата</h2>
+        <pre id="chatStatsOutput" class="stats-output">Нет данных</pre>
+        <menu class="modal__actions"><button value="cancel" class="ghost">Закрыть</button></menu>
       </form>
     </dialog>
 
@@ -120,11 +146,6 @@
       </form>
     </dialog>
 
-    <script>
-      // В проде укажите backend API, например:
-      // window.__AUTH_API_BASE__ = 'https://api.yourdomain.com';
-      // Facebook App создаётся владельцем аккаунта в Meta Developers: https://developers.facebook.com/
-    </script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -395,3 +395,23 @@ body.blur-previews .chat-item:hover .preview,
 body.blur-previews .chat-item.active .preview {
   filter: blur(0);
 }
+
+.settings-modal {
+  width: min(760px, 96vw);
+}
+
+.stats-output {
+  max-height: 320px;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.disable-animations *,
+.disable-animations *::before,
+.disable-animations *::after {
+  animation: none !important;
+  transition: none !important;
+}

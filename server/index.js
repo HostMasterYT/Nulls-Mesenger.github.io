@@ -6,7 +6,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 8080;
@@ -17,16 +17,12 @@ const VK_CLIENT_ID = process.env.VK_CLIENT_ID || '';
 const VK_CLIENT_SECRET = process.env.VK_CLIENT_SECRET || '';
 const VK_REDIRECT_URI = process.env.VK_REDIRECT_URI || `http://localhost:${PORT}/auth/vk/callback`;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:4173';
-const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || '')
-  .split(',')
-  .map((item) => item.trim())
-  .filter(Boolean);
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || '').split(',').map((v) => v.trim()).filter(Boolean);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 
 const defaultAllowedOrigins = [FRONTEND_ORIGIN, 'http://localhost:4173', 'http://127.0.0.1:4173', 'http://0.0.0.0:4173'];
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...FRONTEND_ORIGINS]);
-
 app.use(cors({
   credentials: true,
   origin(origin, callback) {
@@ -39,36 +35,76 @@ const dataDir = path.join(process.cwd(), 'data');
 const usersPath = path.join(dataDir, 'users.json');
 const chatsPath = path.join(dataDir, 'chats.json');
 const oauthStates = new Map();
-const pendingCodes = new Map();
 
-function hashPassword(password) { return crypto.createHash('sha256').update(password).digest('hex'); }
+const createDefaultSettings = (name = 'Вы') => ({
+  profile: { nickname: name, status: 'Онлайн', avatar: '😎', language: 'ru' },
+  appearance: { theme: 'dark', accent: 'blue', density: 'comfortable', fontScale: 100, animations: true },
+  privacy: { hidePhone: false, readReceipts: true, lastSeenVisible: true, messagePreviewVisible: true },
+  notifications: { sound: true, desktop: false, vibrate: false, quietHoursEnabled: false, quietFrom: '23:00', quietTo: '08:00' },
+  security: { pinEnabled: false, biometricPrompt: false, loginAlerts: true, blurPreviews: false, twoFactorDemo: false, autoLockMinutes: 0, sessionTtlDays: 30 },
+  chat: { enterToSend: true, autoDownloadMedia: true, stickers: true, reactions: true, spellcheck: true },
+});
+
+const mergeSettings = (current, incoming) => {
+  const result = structuredClone(current || createDefaultSettings());
+  if (!incoming || typeof incoming !== 'object') return result;
+  const mergeSection = (section, fields) => {
+    if (!incoming[section] || typeof incoming[section] !== 'object') return;
+    fields.forEach((field) => {
+      if (field in incoming[section]) result[section][field] = incoming[section][field];
+    });
+  };
+
+  mergeSection('profile', ['nickname', 'status', 'avatar', 'language']);
+  mergeSection('appearance', ['theme', 'accent', 'density', 'fontScale', 'animations']);
+  mergeSection('privacy', ['hidePhone', 'readReceipts', 'lastSeenVisible', 'messagePreviewVisible']);
+  mergeSection('notifications', ['sound', 'desktop', 'vibrate', 'quietHoursEnabled', 'quietFrom', 'quietTo']);
+  mergeSection('security', ['pinEnabled', 'biometricPrompt', 'loginAlerts', 'blurPreviews', 'twoFactorDemo', 'autoLockMinutes', 'sessionTtlDays']);
+  mergeSection('chat', ['enterToSend', 'autoDownloadMedia', 'stickers', 'reactions', 'spellcheck']);
+  return result;
+};
+
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
 
 async function ensureStorage() {
   await fs.mkdir(dataDir, { recursive: true });
-  try { await fs.access(usersPath); } catch {
+  try {
+    await fs.access(usersPath);
+  } catch {
     const seedUsers = [
-      { id: 'seed-1', username: 'friend1', name: 'Friend One', phone: '+79990000001', email: 'friend1@example.com', passwordHash: hashPassword('123456'), verified: true, provider: 'Local' },
-      { id: 'seed-2', username: 'friend2', name: 'Friend Two', phone: '+79990000002', email: 'friend2@example.com', passwordHash: hashPassword('123456'), verified: true, provider: 'Local' },
+      {
+        id: 'seed-1', username: 'friend1', name: 'Friend One', phone: '+79990000001', email: 'friend1@example.com',
+        passwordHash: hashPassword('123456'), verified: true, provider: 'Local', settings: createDefaultSettings('Friend One'),
+      },
+      {
+        id: 'seed-2', username: 'friend2', name: 'Friend Two', phone: '+79990000002', email: 'friend2@example.com',
+        passwordHash: hashPassword('123456'), verified: true, provider: 'Local', settings: createDefaultSettings('Friend Two'),
+      },
     ];
     await fs.writeFile(usersPath, JSON.stringify(seedUsers, null, 2));
   }
-  try { await fs.access(chatsPath); } catch {
+  try {
+    await fs.access(chatsPath);
+  } catch {
     await fs.writeFile(chatsPath, JSON.stringify([], null, 2));
   }
 }
 
-async function readUsers() { await ensureStorage(); return JSON.parse(await fs.readFile(usersPath, 'utf8')); }
-async function writeUsers(users) { await fs.writeFile(usersPath, JSON.stringify(users, null, 2)); }
-async function readChats() { await ensureStorage(); return JSON.parse(await fs.readFile(chatsPath, 'utf8')); }
-async function writeChats(chats) { await fs.writeFile(chatsPath, JSON.stringify(chats, null, 2)); }
+const readUsers = async () => { await ensureStorage(); return JSON.parse(await fs.readFile(usersPath, 'utf8')); };
+const writeUsers = async (users) => fs.writeFile(usersPath, JSON.stringify(users, null, 2));
+const readChats = async () => { await ensureStorage(); return JSON.parse(await fs.readFile(chatsPath, 'utf8')); };
+const writeChats = async (chats) => fs.writeFile(chatsPath, JSON.stringify(chats, null, 2));
 
-function createSessionToken(userId) {
+const createSessionToken = (userId) => {
   const exp = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
   const payload = `${userId}.${exp}`;
   const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
   return `${payload}.${sig}`;
-}
-function verifySessionToken(token) {
+};
+
+const verifySessionToken = (token) => {
   if (!token) return null;
   const [userId, expStr, sig] = token.split('.');
   if (!userId || !expStr || !sig) return null;
@@ -77,16 +113,26 @@ function verifySessionToken(token) {
   if (sig !== expected) return null;
   const exp = Number(expStr);
   if (!Number.isFinite(exp) || Date.now() > exp) return null;
-  return { userId };
-}
-function setSessionCookie(res, userId) {
+  return { userId, exp };
+};
+
+const setSessionCookie = (res, userId) => {
   res.cookie('nm_auth', createSessionToken(userId), {
     httpOnly: true,
     sameSite: 'lax',
     secure: false,
     maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000,
   });
-}
+};
+
+const publicUser = (u) => ({
+  id: u.id,
+  provider: u.provider,
+  name: u.name,
+  phone: u.phone,
+  email: u.email,
+  settings: mergeSettings(createDefaultSettings(u.name), u.settings || {}),
+});
 
 async function getCurrentUser(req) {
   const parsed = verifySessionToken(req.cookies.nm_auth);
@@ -105,24 +151,32 @@ function requireAuth(req, res, next) {
     .catch(() => res.status(500).json({ error: 'internal_error' }));
 }
 
-function sendVerificationCode(channel, target, code) {
-  console.log(`[VERIFICATION:${channel}] ${target} -> code: ${code}`);
-}
+const createOauthState = (returnTo) => {
+  const key = crypto.randomBytes(16).toString('hex');
+  oauthStates.set(key, { returnTo, createdAt: Date.now() });
+  return JSON.stringify({ st: key, ds: Date.now() });
+};
 
-function createOauthState(returnTo) {
-  const st = crypto.randomBytes(16).toString('hex');
-  oauthStates.set(st, { returnTo, createdAt: Date.now() });
-  return JSON.stringify({ st, ds: Date.now() });
-}
-function consumeOauthState(stateParam) {
+const consumeOauthState = (stateParam) => {
   let parsed;
   try { parsed = JSON.parse(String(stateParam || '{}')); } catch { return null; }
   if (!parsed?.st || !oauthStates.has(parsed.st)) return null;
   const state = oauthStates.get(parsed.st);
   oauthStates.delete(parsed.st);
   return state;
-}
+};
 
+app.get('/api/meta', (_req, res) => {
+  res.json({
+    service: 'nulls-messenger-auth-api',
+    version: '2.0',
+    endpoints: [
+      'POST /auth/register', 'POST /auth/login', 'GET /auth/providers/status',
+      'GET /settings', 'PUT /settings', 'GET /security/sessions', 'POST /security/sessions/refresh',
+      'POST /chats/by-phone', 'GET /chats', 'GET /chats/:chatId/messages?limit&before', 'GET /chats/:chatId/stats', 'POST /chats/:chatId/messages',
+    ],
+  });
+});
 
 app.get('/auth/providers/status', (_req, res) => {
   res.json({
@@ -148,61 +202,13 @@ app.post('/auth/register', async (req, res) => {
     passwordHash: hashPassword(password),
     verified: true,
     provider: 'Local',
+    settings: createDefaultSettings(username),
   };
   users.push(user);
   await writeUsers(users);
 
   setSessionCookie(res, user.id);
-  return res.json({ user: { id: user.id, provider: 'Local', name: user.name, phone: user.phone, email: user.email } });
-});
-
-app.post('/auth/register/request-code', async (req, res) => {
-  const { username, phone, email, password, channel } = req.body || {};
-  if (!username || !phone || !password) return res.status(400).json({ error: 'username, phone, password required' });
-
-  const users = await readUsers();
-  if (users.some((u) => u.phone === phone)) return res.status(409).json({ error: 'phone already registered' });
-  if (email && users.some((u) => u.email === email)) return res.status(409).json({ error: 'email already registered' });
-
-  const selectedChannel = channel === 'email' && email ? 'email' : 'phone';
-  const target = selectedChannel === 'email' ? email : phone;
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  pendingCodes.set(`${selectedChannel}:${target}`, {
-    code,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-    payload: { username, phone, email: email || '', passwordHash: hashPassword(password) },
-  });
-  sendVerificationCode(selectedChannel, target, code);
-  res.json({ ok: true, channel: selectedChannel, target, expiresIn: 300, dev_code: code });
-});
-
-app.post('/auth/register/confirm', async (req, res) => {
-  const { channel, target, code } = req.body || {};
-  const selectedChannel = channel === 'email' ? 'email' : 'phone';
-  const key = `${selectedChannel}:${target || ''}`;
-  const pending = pendingCodes.get(key);
-  if (!pending) return res.status(400).json({ error: 'code_not_found' });
-  if (Date.now() > pending.expiresAt) { pendingCodes.delete(key); return res.status(400).json({ error: 'code_expired' }); }
-  if (String(code || '') !== pending.code) return res.status(400).json({ error: 'invalid_code' });
-
-  const users = await readUsers();
-  if (users.some((u) => u.phone === pending.payload.phone)) return res.status(409).json({ error: 'phone already registered' });
-
-  const user = {
-    id: crypto.randomUUID(),
-    username: pending.payload.username,
-    name: pending.payload.username,
-    phone: pending.payload.phone,
-    email: pending.payload.email,
-    passwordHash: pending.payload.passwordHash,
-    verified: true,
-    provider: 'Local',
-  };
-  users.push(user);
-  await writeUsers(users);
-  pendingCodes.delete(key);
-  setSessionCookie(res, user.id);
-  res.json({ user: { id: user.id, provider: 'Local', name: user.name, phone: user.phone, email: user.email } });
+  return res.json({ user: publicUser(user) });
 });
 
 app.post('/auth/login', async (req, res) => {
@@ -214,13 +220,14 @@ app.post('/auth/login', async (req, res) => {
   if (!user || user.passwordHash !== hashPassword(password)) return res.status(401).json({ error: 'invalid_credentials' });
   if (!user.verified) return res.status(403).json({ error: 'user_not_verified' });
 
+  user.settings = mergeSettings(createDefaultSettings(user.name), user.settings || {});
+  await writeUsers(users);
   setSessionCookie(res, user.id);
-  res.json({ user: { id: user.id, provider: user.provider || 'Local', name: user.name, phone: user.phone, email: user.email } });
+  res.json({ user: publicUser(user) });
 });
 
 app.get('/auth/facebook/start', (req, res) => {
   if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) return res.status(500).send('Configure FACEBOOK_APP_ID and FACEBOOK_APP_SECRET first.');
-
   const oauthUrl = new URL('https://www.facebook.com/v25.0/dialog/oauth');
   oauthUrl.searchParams.set('client_id', FACEBOOK_APP_ID);
   oauthUrl.searchParams.set('redirect_uri', FACEBOOK_REDIRECT_URI);
@@ -264,19 +271,17 @@ app.get('/auth/facebook/callback', async (req, res) => {
   let user = users.find((u) => u.provider === 'Facebook' && u.facebookId === me.id);
   if (!user) {
     user = {
-      id: crypto.randomUUID(), username: `fb_${me.id}`, name: me.name, phone: '', email: me.email || '', passwordHash: '', verified: true, provider: 'Facebook', facebookId: me.id,
+      id: crypto.randomUUID(), username: `fb_${me.id}`, name: me.name, phone: '', email: me.email || '', passwordHash: '', verified: true, provider: 'Facebook', facebookId: me.id, settings: createDefaultSettings(me.name),
     };
     users.push(user);
     await writeUsers(users);
   }
-
   setSessionCookie(res, user.id);
   res.redirect(state.returnTo || FRONTEND_ORIGIN);
 });
 
 app.get('/auth/vk/start', (req, res) => {
   if (!VK_CLIENT_ID || !VK_CLIENT_SECRET) return res.status(500).send('Configure VK_CLIENT_ID and VK_CLIENT_SECRET first.');
-
   const oauthUrl = new URL('https://oauth.vk.com/authorize');
   oauthUrl.searchParams.set('client_id', VK_CLIENT_ID);
   oauthUrl.searchParams.set('redirect_uri', VK_REDIRECT_URI);
@@ -333,6 +338,7 @@ app.get('/auth/vk/callback', async (req, res) => {
       verified: true,
       provider: 'VK',
       vkId: String(vkUser.id),
+      settings: createDefaultSettings(`${vkUser.first_name || ''} ${vkUser.last_name || ''}`.trim()),
     };
     users.push(user);
     await writeUsers(users);
@@ -343,7 +349,38 @@ app.get('/auth/vk/callback', async (req, res) => {
 });
 
 app.get('/me', requireAuth, (req, res) => {
-  res.json({ user: { id: req.user.id, provider: req.user.provider, name: req.user.name, phone: req.user.phone, email: req.user.email } });
+  res.json({ user: publicUser(req.user) });
+});
+
+app.get('/settings', requireAuth, (req, res) => {
+  res.json({ settings: mergeSettings(createDefaultSettings(req.user.name), req.user.settings || {}) });
+});
+
+app.put('/settings', requireAuth, async (req, res) => {
+  const users = await readUsers();
+  const idx = users.findIndex((u) => u.id === req.user.id);
+  if (idx < 0) return res.status(404).json({ error: 'user_not_found' });
+  const current = mergeSettings(createDefaultSettings(users[idx].name), users[idx].settings || {});
+  const merged = mergeSettings(current, req.body?.settings || {});
+  users[idx].settings = merged;
+  users[idx].name = merged.profile.nickname || users[idx].name;
+  await writeUsers(users);
+  return res.json({ settings: merged, user: publicUser(users[idx]) });
+});
+
+app.get('/security/sessions', requireAuth, (req, res) => {
+  const parsed = verifySessionToken(req.cookies.nm_auth);
+  res.json({
+    sessions: [{
+      id: 'current', current: true, createdAt: Date.now(), expiresAt: parsed?.exp || (Date.now() + SESSION_DAYS * 86400000),
+      userAgent: 'Browser Session', ip: req.ip,
+    }],
+  });
+});
+
+app.post('/security/sessions/refresh', requireAuth, (req, res) => {
+  setSessionCookie(res, req.user.id);
+  res.json({ ok: true, refreshed: true });
 });
 
 app.post('/auth/logout', (req, res) => {
@@ -363,12 +400,7 @@ app.post('/chats/by-phone', requireAuth, async (req, res) => {
   const chats = await readChats();
   let chat = chats.find((c) => c.participants.includes(req.user.id) && c.participants.includes(other.id));
   if (!chat) {
-    chat = {
-      id: crypto.randomUUID(),
-      participants: [req.user.id, other.id],
-      messages: [],
-      createdAt: Date.now(),
-    };
+    chat = { id: crypto.randomUUID(), participants: [req.user.id, other.id], messages: [], createdAt: Date.now() };
     chats.push(chat);
     await writeChats(chats);
   }
@@ -391,6 +423,7 @@ app.get('/chats', requireAuth, async (req, res) => {
         name: other?.name || 'Unknown',
         avatar: '👤',
         lastMessage: chat.messages.at(-1)?.text || '',
+        unreadCount: 0,
         updatedAt: chat.messages.at(-1)?.createdAt || chat.createdAt,
       };
     })
@@ -400,18 +433,32 @@ app.get('/chats', requireAuth, async (req, res) => {
 });
 
 app.get('/chats/:chatId/messages', requireAuth, async (req, res) => {
+  const limitRaw = Number(req.query.limit || 100);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 100;
+  const before = Number(req.query.before || Number.POSITIVE_INFINITY);
+
   const chats = await readChats();
   const chat = chats.find((c) => c.id === req.params.chatId);
   if (!chat || !chat.participants.includes(req.user.id)) return res.status(404).json({ error: 'chat_not_found' });
 
-  const messages = chat.messages.map((m) => ({
+  const filtered = chat.messages.filter((m) => m.createdAt < before).slice(-limit);
+  const messages = filtered.map((m) => ({
     id: m.id,
     text: m.text,
     createdAt: m.createdAt,
     from: m.userId === req.user.id ? 'me' : 'them',
   }));
 
-  return res.json({ messages });
+  return res.json({ messages, hasMore: chat.messages.length > filtered.length });
+});
+
+app.get('/chats/:chatId/stats', requireAuth, async (req, res) => {
+  const chats = await readChats();
+  const chat = chats.find((c) => c.id === req.params.chatId);
+  if (!chat || !chat.participants.includes(req.user.id)) return res.status(404).json({ error: 'chat_not_found' });
+  const myMessages = chat.messages.filter((m) => m.userId === req.user.id).length;
+  const theirMessages = chat.messages.length - myMessages;
+  res.json({ stats: { totalMessages: chat.messages.length, myMessages, theirMessages, firstMessageAt: chat.messages[0]?.createdAt || null, lastMessageAt: chat.messages.at(-1)?.createdAt || null } });
 });
 
 app.post('/chats/:chatId/messages', requireAuth, async (req, res) => {
@@ -424,7 +471,6 @@ app.post('/chats/:chatId/messages', requireAuth, async (req, res) => {
 
   chat.messages.push({ id: crypto.randomUUID(), userId: req.user.id, text, createdAt: Date.now() });
   await writeChats(chats);
-
   return res.status(201).json({ ok: true });
 });
 
