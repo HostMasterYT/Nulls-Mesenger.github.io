@@ -110,6 +110,31 @@ function consumeOauthState(stateParam) {
   return state;
 }
 
+app.post('/auth/register', async (req, res) => {
+  const { username, phone, email, password } = req.body || {};
+  if (!username || !phone || !password) return res.status(400).json({ error: 'username, phone, password required' });
+
+  const users = await readUsers();
+  if (users.some((u) => u.phone === phone)) return res.status(409).json({ error: 'phone already registered' });
+  if (email && users.some((u) => u.email === email)) return res.status(409).json({ error: 'email already registered' });
+
+  const user = {
+    id: crypto.randomUUID(),
+    username,
+    name: username,
+    phone,
+    email: email || '',
+    passwordHash: hashPassword(password),
+    verified: true,
+    provider: 'Local',
+  };
+  users.push(user);
+  await writeUsers(users);
+
+  setSessionCookie(res, user.id);
+  return res.json({ user: { id: user.id, provider: 'Local', name: user.name, phone: user.phone, email: user.email } });
+});
+
 app.post('/auth/register/request-code', async (req, res) => {
   const { username, phone, email, password, channel } = req.body || {};
   if (!username || !phone || !password) return res.status(400).json({ error: 'username, phone, password required' });
