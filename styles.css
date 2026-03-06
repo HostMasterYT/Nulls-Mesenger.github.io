@@ -8,6 +8,7 @@
   --bubble-me: #4a8cff;
   --bubble-them: rgba(255, 255, 255, 0.12);
   --wallpaper: radial-gradient(circle at 20% 20%, #1f355f, #0b1020 60%);
+  --accent-glow: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 :root[data-theme="light"] {
@@ -45,7 +46,7 @@ body {
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.03) inset;
 }
 
 .sidebar, .chat {
@@ -128,6 +129,7 @@ small { color: var(--muted); }
 code { color: #cde0ff; }
 
 .icon-btn {
+  transition: transform .15s ease, background .15s ease;
   border: 0;
   background: var(--surface-strong);
   color: var(--text);
@@ -185,6 +187,7 @@ code { color: #cde0ff; }
 .chat-item.active,
 .chat-item:hover {
   background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 .avatar {
@@ -203,6 +206,7 @@ code { color: #cde0ff; }
 .chat {
   overflow: hidden;
   background: var(--wallpaper);
+  box-shadow: 0 0 80px var(--accent-glow) inset;
 }
 
 .chat__header {
@@ -236,6 +240,7 @@ code { color: #cde0ff; }
 .msg.me {
   align-self: flex-end;
   background: var(--bubble-me);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--bubble-me) 45%, transparent);
 }
 
 .msg.them {
@@ -336,3 +341,5 @@ code { color: #cde0ff; }
 }
 
 body[data-theme="light"] { background: linear-gradient(120deg, #e8eefc, #f7faff 60%, #dee8ff); }
+
+.icon-btn:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 24%, var(--surface-strong)); }

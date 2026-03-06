@@ -1,6 +1,6 @@
 # Nulls Messenger (UI MVP)
 
-Локальный прототип мессенджера: чаты, сообщения, звонки, настройки профиля и авторизация.
+Локальный прототип мессенджера: чаты, сообщения, звонки, настройки профиля, локальная регистрация + OAuth (Facebook/VK).
 
 ## Запуск фронтенда
 
@@ -26,33 +26,16 @@ SESSION_SECRET=replace_me \
 npm start
 ```
 
-## Facebook/VK OAuth через официальный сайт
+## Что исправлено
 
-Теперь кнопки **Facebook** и **VK** отправляют пользователя на официальные OAuth-страницы:
-- Facebook: `https://www.facebook.com/v25.0/dialog/oauth`
-- VK: `https://oauth.vk.com/authorize`
-
-Если backend на другом домене, задайте на фронте:
-
-```html
-<script>
-  window.__AUTH_API_BASE__ = 'https://api.yourdomain.com';
-</script>
-<script src="app.js"></script>
-```
-
-Опционально можно включить direct-mode с публичными client id:
-
-```html
-<script>
-  window.__OAUTH_PUBLIC__ = {
-    facebookClientId: '...'
-    ,facebookRedirectUri: 'https://api.yourdomain.com/auth/facebook/callback'
-    ,vkClientId: '...'
-    ,vkRedirectUri: 'https://api.yourdomain.com/auth/vk/callback'
-  };
-</script>
-```
+- **Facebook кнопка**: теперь всегда стартует OAuth через backend endpoint `/auth/facebook/start`, который редиректит на официальный `facebook.com`.
+- **VK кнопка**: теперь рабочая, добавлен backend flow `/auth/vk/start` -> `/auth/vk/callback` через официальный `oauth.vk.com`.
+- **Реальные чаты между пользователями сервиса**:
+  - создание/поиск чата по номеру телефона (`POST /chats/by-phone`)
+  - отправка сообщений (`POST /chats/:chatId/messages`)
+  - получение чатов/сообщений (`GET /chats`, `GET /chats/:chatId/messages`)
+  - убраны фейковые авто-ответы ботов
+- Добавлена цветовая кастомизация интерфейса: blue/purple/pink/red/orange/green + светлая/темная тема.
 
 ## API
 
@@ -65,8 +48,11 @@ npm start
 - `GET /auth/vk/callback`
 - `GET /me`
 - `POST /auth/logout`
-- `GET /users/by-phone?phone=...`
+- `POST /chats/by-phone`
+- `GET /chats`
+- `GET /chats/:chatId/messages`
+- `POST /chats/:chatId/messages`
 
 ## Важно
 
-Этот MVP — отдельный мессенджер с OAuth-входом. Он не превращает приложение в официальный Facebook Messenger/VK Messenger с доступом к произвольным перепискам пользователей платформы.
+Это отдельный мессенджер-сервис с OAuth-входом. Он не даёт доступ к произвольным личным перепискам пользователей Facebook/VK за пределами вашего приложения.
