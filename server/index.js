@@ -17,10 +17,23 @@ const VK_CLIENT_ID = process.env.VK_CLIENT_ID || '';
 const VK_CLIENT_SECRET = process.env.VK_CLIENT_SECRET || '';
 const VK_REDIRECT_URI = process.env.VK_REDIRECT_URI || `http://localhost:${PORT}/auth/vk/callback`;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:4173';
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 
-app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+const defaultAllowedOrigins = [FRONTEND_ORIGIN, 'http://localhost:4173', 'http://127.0.0.1:4173', 'http://0.0.0.0:4173'];
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...FRONTEND_ORIGINS]);
+
+app.use(cors({
+  credentials: true,
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
+}));
 
 const dataDir = path.join(process.cwd(), 'data');
 const usersPath = path.join(dataDir, 'users.json');

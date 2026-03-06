@@ -150,10 +150,17 @@ function renderMessages() {
 function renderAll() { applyTheme(); applyTranslations(); renderProviderStatus(); renderAuth(); renderChats(); renderHeader(); renderMessages(); }
 
 async function api(url, options = {}) {
-  const response = await fetch(`${AUTH_API_BASE}${url}`, { credentials: 'include', ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(json.error || 'api_error');
-  return json;
+  try {
+    const response = await fetch(`${AUTH_API_BASE}${url}`, { credentials: 'include', ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.error || 'api_error');
+    return json;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`network_error: backend недоступен по ${AUTH_API_BASE}`);
+    }
+    throw error;
+  }
 }
 
 async function fetchProviderStatus() {

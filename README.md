@@ -22,10 +22,16 @@ VK_CLIENT_ID=... \
 VK_CLIENT_SECRET=... \
 VK_REDIRECT_URI=http://localhost:8080/auth/vk/callback \
 FRONTEND_ORIGIN=http://localhost:4173 \
+# опционально: несколько origin через запятую
+FRONTEND_ORIGINS=http://localhost:4173,http://127.0.0.1:4173,http://0.0.0.0:4173 \
 SESSION_SECRET=replace_me \
 npm start
 ```
 
+
+> Если при регистрации в браузере ошибка `NetworkError when attempting to fetch resource`,
+> обычно это означает, что backend не запущен на `http://localhost:8080` или origin фронтенда не разрешён CORS.
+> В этой версии сервер по умолчанию разрешает `localhost/127.0.0.1/0.0.0.0:4173`, и дополнительно можно задать `FRONTEND_ORIGINS`.
 ## Регистрация / вход
 
 - Регистрация без кода подтверждения: `POST /auth/register`
