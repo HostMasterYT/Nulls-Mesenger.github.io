@@ -18,21 +18,21 @@ npm install
 FACEBOOK_APP_ID=... \
 FACEBOOK_APP_SECRET=... \
 FACEBOOK_REDIRECT_URI=https://YOUR_API_DOMAIN/auth/facebook/callback \
+VK_CLIENT_ID=... \
+VK_CLIENT_SECRET=... \
+VK_REDIRECT_URI=https://YOUR_API_DOMAIN/auth/vk/callback \
 FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN \
 SESSION_SECRET=replace_me \
 npm start
 ```
 
-## Facebook OAuth без localhost (production)
+## Facebook/VK OAuth через официальный сайт
 
-Чтобы вход открывался через официальный сайт Facebook (а не локальный callback), укажите в Meta Developers:
+Теперь кнопки **Facebook** и **VK** отправляют пользователя на официальные OAuth-страницы:
+- Facebook: `https://www.facebook.com/v25.0/dialog/oauth`
+- VK: `https://oauth.vk.com/authorize`
 
-- **Valid OAuth Redirect URIs**: `https://YOUR_API_DOMAIN/auth/facebook/callback`
-- **App Domains**: `YOUR_API_DOMAIN`, `YOUR_FRONTEND_DOMAIN`
-
-И на фронтенде задайте `window.__AUTH_API_BASE__` (например, в `index.html` перед `app.js`) на ваш backend-домен.
-
-Пример:
+Если backend на другом домене, задайте на фронте:
 
 ```html
 <script>
@@ -41,13 +41,18 @@ npm start
 <script src="app.js"></script>
 ```
 
-## Что исправлено
+Опционально можно включить direct-mode с публичными client id:
 
-- Регистрация рабочая: сначала отправка кода подтверждения (`/auth/register/request-code`), потом подтверждение (`/auth/register/confirm`).
-- Код подтверждения можно отправлять на телефон или email (в демо выводится в лог сервера и возвращается как `dev_code`).
-- Вход сделан не "на один раз": долгоживущая signed cookie (`nm_auth`, по умолчанию 30 дней).
-- Реальный вход через официальный Facebook OAuth сохранён.
-- Поиск пользователя по номеру (`/users/by-phone`) для старта чата между зарегистрированными пользователями вашего сервиса.
+```html
+<script>
+  window.__OAUTH_PUBLIC__ = {
+    facebookClientId: '...'
+    ,facebookRedirectUri: 'https://api.yourdomain.com/auth/facebook/callback'
+    ,vkClientId: '...'
+    ,vkRedirectUri: 'https://api.yourdomain.com/auth/vk/callback'
+  };
+</script>
+```
 
 ## API
 
@@ -56,10 +61,12 @@ npm start
 - `POST /auth/login`
 - `GET /auth/facebook/start`
 - `GET /auth/facebook/callback`
+- `GET /auth/vk/start`
+- `GET /auth/vk/callback`
 - `GET /me`
 - `POST /auth/logout`
 - `GET /users/by-phone?phone=...`
 
 ## Важно
 
-Через обычный Facebook Login API нельзя превратить это приложение в официальный Facebook Messenger и переписываться с произвольными пользователями Facebook. Этот MVP даёт корректный OAuth-вход через Facebook и общение между пользователями, зарегистрированными в вашем сервисе.
+Этот MVP — отдельный мессенджер с OAuth-входом. Он не превращает приложение в официальный Facebook Messenger/VK Messenger с доступом к произвольным перепискам пользователей платформы.
