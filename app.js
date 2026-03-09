@@ -315,6 +315,28 @@ async function refreshSession() {
   toast('Сессия обновлена');
 }
 
+
+window.statusChangeCallback = function statusChangeCallback(response) {
+  if (!response || !response.status) return;
+  if (response.status === 'connected') {
+    toast('Facebook SDK: connected, продолжаю вход через сервер...');
+    startFacebookOAuth();
+    return;
+  }
+  if (response.status === 'not_authorized') {
+    toast('Facebook: приложение не авторизовано.');
+    return;
+  }
+  toast('Facebook: пользователь не вошёл.');
+};
+
+window.checkLoginState = function checkLoginState() {
+  if (!window.FB) return;
+  window.FB.getLoginStatus((response) => {
+    window.statusChangeCallback(response);
+  });
+};
+
 function startFacebookOAuth() {
   if (!state.providers.facebookConfigured) return toast('Facebook OAuth не настроен на сервере');
   const returnTo = `${window.location.origin}${window.location.pathname}`;

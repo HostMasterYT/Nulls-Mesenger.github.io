@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="fb-root"></div>
     <div class="app" id="app">
       <aside class="sidebar glass">
         <header class="sidebar__header">
@@ -31,7 +32,12 @@
           </div>
           <div class="social-grid">
             <button id="facebookLoginBtn" class="social-btn social-btn--facebook" type="button">Facebook</button>
-                      </div>
+          </div>
+          <fb:login-button
+            config_id="1437460264576640"
+            onlogin="checkLoginState();"
+            scope="public_profile,email">
+          </fb:login-button>
           <small id="oauthProviderStatus" class="provider-status">Проверка OAuth-провайдеров...</small>
           <small id="apiMetaStatus" class="provider-status">API metadata: loading...</small>
           <div class="auth-actions"><button id="socialLogoutBtn" class="ghost small" type="button">Выйти</button></div>
@@ -145,6 +151,30 @@
       </form>
     </dialog>
 
+
+    <script>
+      window.fbAsyncInit = function () {
+        FB.init({
+          appId: '1437460264576640',
+          cookie: true,
+          xfbml: true,
+          version: 'v23.0',
+        });
+
+        FB.AppEvents.logPageView();
+        if (window.checkLoginState) window.checkLoginState();
+      };
+
+      (function (d, s, id) {
+        var js;
+        var fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s);
+        js.id = id;
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        fjs.parentNode.insertBefore(js, fjs);
+      })(document, 'script', 'facebook-jssdk');
+    </script>
     <script src="app.js"></script>
   </body>
 </html>

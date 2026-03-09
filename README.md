@@ -53,6 +53,17 @@ npm start
 
 > Важно: зарегистрировать Facebook App может только владелец аккаунта в Meta Developers: <https://developers.facebook.com/>.
 
+
+### Facebook SDK на фронтенде
+
+Во фронтенд добавлены:
+- загрузка `https://connect.facebook.net/en_US/sdk.js`,
+- `FB.init` с `appId: 1437460264576640`,
+- `FB.getLoginStatus` и обработчик `statusChangeCallback`,
+- `<fb:login-button ... onlogin="checkLoginState();">`.
+
+При статусе `connected` UI запускает серверный OAuth flow (`/auth/facebook/start`) для полной синхронизации сессии и данных на backend.
+
 ## API
 
 ### Системные
