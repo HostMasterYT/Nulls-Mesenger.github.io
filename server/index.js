@@ -10,7 +10,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 8080;
-const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || '';
+const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || '1437460264576640';
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
 const FACEBOOK_REDIRECT_URI = process.env.FACEBOOK_REDIRECT_URI || `http://localhost:${PORT}/auth/facebook/callback`;
 const VK_CLIENT_ID = process.env.VK_CLIENT_ID || '';
@@ -180,8 +180,7 @@ app.get('/api/meta', (_req, res) => {
 
 app.get('/auth/providers/status', (_req, res) => {
   res.json({
-    facebook: { configured: Boolean(FACEBOOK_APP_ID && FACEBOOK_APP_SECRET && FACEBOOK_REDIRECT_URI) },
-    vk: { configured: Boolean(VK_CLIENT_ID && VK_CLIENT_SECRET && VK_REDIRECT_URI) },
+    facebook: { configured: Boolean(FACEBOOK_APP_ID && FACEBOOK_APP_SECRET && FACEBOOK_REDIRECT_URI), appId: FACEBOOK_APP_ID },
   });
 });
 
@@ -276,74 +275,6 @@ app.get('/auth/facebook/callback', async (req, res) => {
     users.push(user);
     await writeUsers(users);
   }
-  setSessionCookie(res, user.id);
-  res.redirect(state.returnTo || FRONTEND_ORIGIN);
-});
-
-app.get('/auth/vk/start', (req, res) => {
-  if (!VK_CLIENT_ID || !VK_CLIENT_SECRET) return res.status(500).send('Configure VK_CLIENT_ID and VK_CLIENT_SECRET first.');
-  const oauthUrl = new URL('https://oauth.vk.com/authorize');
-  oauthUrl.searchParams.set('client_id', VK_CLIENT_ID);
-  oauthUrl.searchParams.set('redirect_uri', VK_REDIRECT_URI);
-  oauthUrl.searchParams.set('response_type', 'code');
-  oauthUrl.searchParams.set('scope', 'email');
-  oauthUrl.searchParams.set('v', '5.199');
-  oauthUrl.searchParams.set('state', createOauthState(req.query.return_to || FRONTEND_ORIGIN));
-  res.redirect(oauthUrl.toString());
-});
-
-app.get('/auth/vk/callback', async (req, res) => {
-  const { code, error, error_description } = req.query;
-  if (error) {
-    const url = new URL(FRONTEND_ORIGIN);
-    url.searchParams.set('error', String(error));
-    if (error_description) url.searchParams.set('error_description', String(error_description));
-    return res.redirect(url.toString());
-  }
-
-  const state = consumeOauthState(req.query.state);
-  if (!state) return res.status(400).send('Invalid OAuth state.');
-
-  const tokenUrl = new URL('https://oauth.vk.com/access_token');
-  tokenUrl.searchParams.set('client_id', VK_CLIENT_ID);
-  tokenUrl.searchParams.set('client_secret', VK_CLIENT_SECRET);
-  tokenUrl.searchParams.set('redirect_uri', VK_REDIRECT_URI);
-  tokenUrl.searchParams.set('code', String(code || ''));
-
-  const tokenResponse = await fetch(tokenUrl);
-  const tokenPayload = await tokenResponse.json();
-  if (!tokenResponse.ok || !tokenPayload.access_token || !tokenPayload.user_id) return res.status(400).json({ error: 'vk_exchange_failed', details: tokenPayload });
-
-  const usersUrl = new URL('https://api.vk.com/method/users.get');
-  usersUrl.searchParams.set('user_ids', String(tokenPayload.user_id));
-  usersUrl.searchParams.set('fields', 'photo_200');
-  usersUrl.searchParams.set('access_token', tokenPayload.access_token);
-  usersUrl.searchParams.set('v', '5.199');
-
-  const profileResponse = await fetch(usersUrl);
-  const profilePayload = await profileResponse.json();
-  const vkUser = profilePayload?.response?.[0];
-  if (!profileResponse.ok || !vkUser?.id) return res.status(400).json({ error: 'vk_profile_failed', details: profilePayload });
-
-  const users = await readUsers();
-  let user = users.find((u) => u.provider === 'VK' && u.vkId === String(vkUser.id));
-  if (!user) {
-    user = {
-      id: crypto.randomUUID(),
-      username: `vk_${vkUser.id}`,
-      name: `${vkUser.first_name || ''} ${vkUser.last_name || ''}`.trim() || `vk_${vkUser.id}`,
-      phone: '',
-      email: tokenPayload.email || '',
-      passwordHash: '',
-      verified: true,
-      provider: 'VK',
-      vkId: String(vkUser.id),
-      settings: createDefaultSettings(`${vkUser.first_name || ''} ${vkUser.last_name || ''}`.trim()),
-    };
-    users.push(user);
-    await writeUsers(users);
-  }
-
   setSessionCookie(res, user.id);
   res.redirect(state.returnTo || FRONTEND_ORIGIN);
 });

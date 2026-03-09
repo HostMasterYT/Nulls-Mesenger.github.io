@@ -7,8 +7,9 @@ const state = {
   activeChatId: null,
   messagesByChat: {},
   filter: '',
-  providers: { facebookConfigured: true, vkConfigured: true },
+  providers: { facebookConfigured: true },
   settings: null,
+  demoMode: false,
 };
 
 const defaultSettings = {
@@ -30,8 +31,8 @@ const el = [
   'securityPinEnabled','securityBiometric','securityLoginAlerts','securityBlurPreviews','security2faDemo','securityAutoLock','securitySessionTtl',
   'chatEnterToSend','chatAutoMedia','chatStickers','chatReactions','chatSpellcheck',
   'voiceCallBtn','videoCallBtn','showStatsBtn','statsDialog','chatStatsOutput','refreshSessionBtn',
-  'callDialog','callTitle','callText','callAvatar','newChatBtn','authState','facebookLoginBtn','vkLoginBtn','socialLogoutBtn',
-  'sidebarSubtitle','authHint','sendBtn','endCallBtn','localUsername','localPhone','localPassword','registerBtn','loginBtn','localEmail','oauthProviderStatus','apiMetaStatus'
+  'callDialog','callTitle','callText','callAvatar','newChatBtn','authState','facebookLoginBtn','socialLogoutBtn',
+  'sendBtn','cancelBtn','localUsername','localPhone','localPassword','registerBtn','loginBtn','localEmail','oauthProviderStatus','apiMetaStatus','authHint'
 ].reduce((a, k) => (a[k] = $(k), a), {});
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -48,6 +49,14 @@ const mergeSettings = (base, incoming) => {
   return result;
 };
 
+function toast(message) {
+  const node = document.createElement('div');
+  node.className = 'toast-msg';
+  node.textContent = message;
+  document.body.appendChild(node);
+  requestAnimationFrame(() => node.classList.add('show'));
+  setTimeout(() => { node.classList.remove('show'); setTimeout(() => node.remove(), 220); }, 2200);
+}
 function currentChat() { return state.chats.find((c) => c.id === state.activeChatId) || null; }
 function getSettings() {
   if (state.settings) return state.settings;
@@ -57,20 +66,47 @@ function getSettings() {
 }
 function saveSettingsLocal() { localStorage.setItem('nm-settings', JSON.stringify(getSettings())); }
 
+function seedDemoData() {
+  const existing = JSON.parse(localStorage.getItem('nm-demo-data') || 'null');
+  if (existing) return existing;
+  const now = Date.now();
+  const seeded = {
+    user: { id: 'demo-me', provider: 'Demo', name: 'Demo User', phone: '+70000000000', email: 'demo@local' },
+    chats: [
+      { id: 'demo-chat-1', name: 'Alice', avatar: '🧑‍💻', participants: ['demo-me', 'alice'], messages: [{ id: 'm1', userId: 'alice', text: 'Привет! Это оффлайн-демо.', createdAt: now - 60000 }] },
+      { id: 'demo-chat-2', name: 'Bob', avatar: '🎨', participants: ['demo-me', 'bob'], messages: [{ id: 'm2', userId: 'demo-me', text: 'Тут всё работает без backend.', createdAt: now - 30000 }] },
+    ],
+  };
+  localStorage.setItem('nm-demo-data', JSON.stringify(seeded));
+  return seeded;
+}
+function readDemoData() { return seedDemoData(); }
+function writeDemoData(data) { localStorage.setItem('nm-demo-data', JSON.stringify(data)); }
+
+function enterDemoMode(reason = '') {
+  if (!state.demoMode) toast(`Backend недоступен. Включен demo mode.${reason ? `\n${reason}` : ''}`);
+  state.demoMode = true;
+  el.apiMetaStatus.textContent = 'API metadata: demo mode';
+  el.oauthProviderStatus.textContent = 'Facebook OAuth: unavailable in demo mode';
+  const d = readDemoData();
+  state.user = d.user;
+  state.chats = d.chats.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, lastMessage: c.messages.at(-1)?.text || '', updatedAt: c.messages.at(-1)?.createdAt || Date.now(), unreadCount: 0 }));
+  if (!state.activeChatId && state.chats.length) state.activeChatId = state.chats[0].id;
+  state.messagesByChat = {};
+  d.chats.forEach((chat) => {
+    state.messagesByChat[chat.id] = chat.messages.map((m) => ({ id: m.id, text: m.text, createdAt: m.createdAt, from: m.userId === d.user.id ? 'me' : 'them' }));
+  });
+}
+
 async function api(url, options = {}) {
-  try {
-    const response = await fetch(`${AUTH_API_BASE}${url}`, {
-      credentials: 'include',
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(json.error || 'api_error');
-    return json;
-  } catch (error) {
-    if (error instanceof TypeError) throw new Error(`network_error: backend недоступен по ${AUTH_API_BASE}`);
-    throw error;
-  }
+  const response = await fetch(`${AUTH_API_BASE}${url}`, {
+    credentials: 'include',
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(json.error || 'api_error');
+  return json;
 }
 
 function applyThemeFromSettings() {
@@ -89,19 +125,26 @@ function applyThemeFromSettings() {
 
 function renderAuth() {
   const s = getSettings();
-  let label = 'Не авторизованы';
+  let label = state.demoMode ? 'Demo mode (offline)' : 'Не авторизованы';
   if (state.user) {
     label = `${state.user.provider || 'Local'}: ${state.user.name}`;
     if (!s.privacy.hidePhone && state.user.phone) label += ` · ${state.user.phone}`;
   }
   el.authState.textContent = label;
   el.socialLogoutBtn.disabled = !state.user;
+  el.authHint.textContent = state.demoMode
+    ? 'Demo mode: кнопки работают локально, без backend.'
+    : 'Локальный вход + Facebook OAuth.';
 }
 
 function renderProviderStatus() {
-  el.oauthProviderStatus.textContent = `${state.providers.facebookConfigured ? 'Facebook OAuth: OK' : 'Facebook OAuth: OFF'} · ${state.providers.vkConfigured ? 'VK OAuth: OK' : 'VK OAuth: OFF'}`;
+  if (state.demoMode) {
+    el.oauthProviderStatus.textContent = 'Facebook OAuth: unavailable in demo mode';
+    el.facebookLoginBtn.disabled = true;
+        return;
+  }
+  el.oauthProviderStatus.textContent = `${state.providers.facebookConfigured ? 'Facebook OAuth: OK' : 'Facebook OAuth: OFF'}`;
   el.facebookLoginBtn.disabled = !state.providers.facebookConfigured;
-  el.vkLoginBtn.disabled = !state.providers.vkConfigured;
 }
 
 function renderChats() {
@@ -138,25 +181,21 @@ function fillSettingsForm() {
   el.profileStatus.value = s.profile.status;
   el.profileAvatar.value = s.profile.avatar;
   el.languageSelect.value = s.profile.language;
-
   el.themeMode.value = s.appearance.theme;
   el.accentColor.value = s.appearance.accent;
   el.uiDensity.value = s.appearance.density;
   el.fontScale.value = String(s.appearance.fontScale);
   el.animationsEnabled.checked = !!s.appearance.animations;
-
   el.privacyHidePhone.checked = !!s.privacy.hidePhone;
   el.privacyReadReceipts.checked = !!s.privacy.readReceipts;
   el.privacyLastSeen.checked = !!s.privacy.lastSeenVisible;
   el.privacyPreview.checked = !!s.privacy.messagePreviewVisible;
-
   el.notifSound.checked = !!s.notifications.sound;
   el.notifDesktop.checked = !!s.notifications.desktop;
   el.notifVibrate.checked = !!s.notifications.vibrate;
   el.notifQuietEnabled.checked = !!s.notifications.quietHoursEnabled;
   el.notifQuietFrom.value = s.notifications.quietFrom;
   el.notifQuietTo.value = s.notifications.quietTo;
-
   el.securityPinEnabled.checked = !!s.security.pinEnabled;
   el.securityBiometric.checked = !!s.security.biometricPrompt;
   el.securityLoginAlerts.checked = !!s.security.loginAlerts;
@@ -164,7 +203,6 @@ function fillSettingsForm() {
   el.security2faDemo.checked = !!s.security.twoFactorDemo;
   el.securityAutoLock.value = String(s.security.autoLockMinutes);
   el.securitySessionTtl.value = String(s.security.sessionTtlDays);
-
   el.chatEnterToSend.checked = !!s.chat.enterToSend;
   el.chatAutoMedia.checked = !!s.chat.autoDownloadMedia;
   el.chatStickers.checked = !!s.chat.stickers;
@@ -184,37 +222,41 @@ function readSettingsForm() {
 }
 
 async function fetchProviderStatus() {
+  if (state.demoMode) return;
   try {
     const data = await api('/auth/providers/status', { method: 'GET' });
-    state.providers = { facebookConfigured: !!data.facebook?.configured, vkConfigured: !!data.vk?.configured };
-  } catch { state.providers = { facebookConfigured: true, vkConfigured: true }; }
+    state.providers = { facebookConfigured: !!data.facebook?.configured };
+  } catch {
+    enterDemoMode('Не удалось получить статус OAuth провайдеров.');
+  }
 }
 
 async function fetchApiMeta() {
+  if (state.demoMode) return;
   try {
     const meta = await api('/api/meta', { method: 'GET' });
     el.apiMetaStatus.textContent = `API ${meta.version}: ${meta.endpoints.length} endpoints`;
   } catch {
-    el.apiMetaStatus.textContent = 'API metadata: unavailable';
+    enterDemoMode('Не удалось получить API metadata.');
   }
 }
 
 async function fetchSessionUser() {
+  if (state.demoMode) return;
   try {
     const me = await api('/me', { method: 'GET' });
     state.user = me.user || null;
     state.settings = mergeSettings(defaultSettings, me.user?.settings || {});
     saveSettingsLocal();
     await loadChats();
-  } catch {
-    state.user = null;
-    state.chats = [];
-    state.messagesByChat = {};
+  } catch (error) {
+    if (String(error.message || '').includes('network')) enterDemoMode('Backend недоступен по сети.');
+    else state.user = null;
   }
 }
 
 async function syncSettingsFromServer() {
-  if (!state.user) return;
+  if (!state.user || state.demoMode) return;
   try {
     const data = await api('/settings', { method: 'GET' });
     state.settings = mergeSettings(defaultSettings, data.settings || {});
@@ -228,34 +270,79 @@ async function saveSettings() {
   saveSettingsLocal();
   applyThemeFromSettings();
   renderAll();
-  if (state.user) {
+  if (state.user && !state.demoMode) {
     const data = await api('/settings', { method: 'PUT', body: JSON.stringify({ settings: newSettings }) });
     state.user = data.user || state.user;
   }
 }
 
+function reloadDemoStateFromStorage() { enterDemoMode(); }
+
 async function registerLocal() {
   const payload = { username: el.localUsername.value.trim(), phone: el.localPhone.value.trim(), email: el.localEmail.value.trim(), password: el.localPassword.value.trim() };
-  if (!payload.username || !payload.phone || !payload.password) return alert('Заполни username, phone, password');
-  const data = await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
-  state.user = data.user;
-  state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
-  await loadChats();
-  renderAll();
+  if (!payload.username || !payload.phone || !payload.password) return toast('Заполни username, phone, password');
+  if (state.demoMode) {
+    const d = readDemoData();
+    d.user = { id: 'demo-me', provider: 'Demo', name: payload.username, phone: payload.phone, email: payload.email || '' };
+    writeDemoData(d);
+    reloadDemoStateFromStorage();
+    renderAll();
+    return;
+  }
+  try {
+    const data = await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+    state.user = data.user;
+    state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
+    await loadChats();
+    renderAll();
+  } catch (error) {
+    if (String(error.message || '').includes('network')) {
+      enterDemoMode('Регистрация переключена на оффлайн demo.');
+      await registerLocal();
+      return;
+    }
+    throw error;
+  }
 }
 
 async function loginLocal() {
   const payload = { username: el.localUsername.value.trim(), phone: el.localPhone.value.trim(), email: el.localEmail.value.trim(), password: el.localPassword.value.trim() };
-  if (!payload.password || (!payload.phone && !payload.email && !payload.username)) return alert('Нужны login и password');
-  const data = await api('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
-  state.user = data.user;
-  state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
-  await loadChats();
-  renderAll();
+  if (!payload.password || (!payload.phone && !payload.email && !payload.username)) return toast('Нужны login и password');
+  if (state.demoMode) {
+    const d = readDemoData();
+    if (payload.username) d.user.name = payload.username;
+    if (payload.phone) d.user.phone = payload.phone;
+    if (payload.email) d.user.email = payload.email;
+    writeDemoData(d);
+    reloadDemoStateFromStorage();
+    renderAll();
+    return;
+  }
+  try {
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+    state.user = data.user;
+    state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
+    await loadChats();
+    renderAll();
+  } catch (error) {
+    if (String(error.message || '').includes('network')) {
+      enterDemoMode('Логин переключен на оффлайн demo.');
+      await loginLocal();
+      return;
+    }
+    throw error;
+  }
 }
 
 async function loadChats() {
   if (!state.user) return;
+  if (state.demoMode) {
+    const d = readDemoData();
+    state.chats = d.chats.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, lastMessage: c.messages.at(-1)?.text || '', updatedAt: c.messages.at(-1)?.createdAt || Date.now(), unreadCount: 0 }));
+    if (!state.activeChatId && state.chats.length) state.activeChatId = state.chats[0].id;
+    if (state.activeChatId) await loadMessages(state.activeChatId);
+    return;
+  }
   const data = await api('/chats', { method: 'GET' });
   state.chats = data.chats || [];
   if (!state.activeChatId && state.chats.length) state.activeChatId = state.chats[0].id;
@@ -263,6 +350,12 @@ async function loadChats() {
 }
 
 async function loadMessages(chatId) {
+  if (state.demoMode) {
+    const d = readDemoData();
+    const chat = d.chats.find((c) => c.id === chatId);
+    state.messagesByChat[chatId] = (chat?.messages || []).map((m) => ({ id: m.id, text: m.text, createdAt: m.createdAt, from: m.userId === d.user.id ? 'me' : 'them' }));
+    return;
+  }
   const data = await api(`/chats/${chatId}/messages?limit=100`, { method: 'GET' });
   state.messagesByChat[chatId] = data.messages || [];
 }
@@ -272,6 +365,18 @@ async function sendMessage() {
   if (!text) return;
   const c = currentChat();
   if (!c) return;
+  if (state.demoMode) {
+    const d = readDemoData();
+    const chat = d.chats.find((x) => x.id === c.id);
+    if (!chat) return;
+    chat.messages.push({ id: cryptoRandom(), userId: d.user.id, text, createdAt: Date.now() });
+    writeDemoData(d);
+    el.messageInput.value = '';
+    await loadChats();
+    await loadMessages(c.id);
+    renderAll();
+    return;
+  }
   await api(`/chats/${c.id}/messages`, { method: 'POST', body: JSON.stringify({ text }) });
   el.messageInput.value = '';
   await loadChats();
@@ -279,9 +384,22 @@ async function sendMessage() {
   renderAll();
 }
 
+function cryptoRandom() { return Math.random().toString(16).slice(2) + Date.now().toString(16); }
+
 async function startChatByPhone() {
   const phone = prompt('Введите номер друга:');
   if (!phone) return;
+  if (state.demoMode) {
+    const d = readDemoData();
+    const id = `demo-chat-${cryptoRandom()}`;
+    d.chats.unshift({ id, name: `User ${phone.slice(-4)}`, avatar: '👤', participants: ['demo-me', phone], messages: [] });
+    writeDemoData(d);
+    await loadChats();
+    state.activeChatId = id;
+    await loadMessages(id);
+    renderAll();
+    return;
+  }
   const data = await api('/chats/by-phone', { method: 'POST', body: JSON.stringify({ phone }) });
   await loadChats();
   state.activeChatId = data.chat.id;
@@ -291,26 +409,37 @@ async function startChatByPhone() {
 
 async function showChatStats() {
   const c = currentChat();
-  if (!c) return;
+  if (!c) return toast('Сначала выберите чат');
+  if (state.demoMode) {
+    const messages = state.messagesByChat[c.id] || [];
+    const myMessages = messages.filter((m) => m.from === 'me').length;
+    const stats = {
+      totalMessages: messages.length,
+      myMessages,
+      theirMessages: messages.length - myMessages,
+      firstMessageAt: messages[0]?.createdAt || null,
+      lastMessageAt: messages.at(-1)?.createdAt || null,
+    };
+    el.chatStatsOutput.textContent = JSON.stringify(stats, null, 2);
+    el.statsDialog.showModal();
+    return;
+  }
   const data = await api(`/chats/${c.id}/stats`, { method: 'GET' });
   el.chatStatsOutput.textContent = JSON.stringify(data.stats || {}, null, 2);
   el.statsDialog.showModal();
 }
 
 async function refreshSession() {
+  if (state.demoMode) return toast('Demo mode: сессия локальная, refresh не требуется.');
   await api('/security/sessions/refresh', { method: 'POST' });
-  alert('Сессия обновлена');
+  toast('Сессия обновлена');
 }
 
 function startFacebookOAuth() {
+  if (state.demoMode) return toast('OAuth недоступен в demo mode');
   const returnTo = `${window.location.origin}${window.location.pathname}`;
   window.location.href = `${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`;
 }
-function startVkOAuth() {
-  const returnTo = `${window.location.origin}${window.location.pathname}`;
-  window.location.href = `${AUTH_API_BASE}/auth/vk/start?return_to=${encodeURIComponent(returnTo)}`;
-}
-
 function renderAll() {
   applyThemeFromSettings();
   renderProviderStatus();
@@ -328,25 +457,29 @@ el.chatList.addEventListener('click', async (e) => {
   renderAll();
 });
 el.chatSearch.addEventListener('input', (e) => { state.filter = e.target.value; renderChats(); });
-el.newChatBtn.addEventListener('click', () => startChatByPhone().catch((e) => alert(e.message)));
+el.newChatBtn.addEventListener('click', () => startChatByPhone().catch((e) => toast(e.message)));
 
-el.messageForm.addEventListener('submit', async (e) => { e.preventDefault(); await sendMessage().catch((err) => alert(err.message)); });
+el.messageForm.addEventListener('submit', async (e) => { e.preventDefault(); await sendMessage().catch((err) => toast(err.message)); });
 el.messageInput.addEventListener('keydown', (e) => {
   const s = getSettings();
   if (s.chat.enterToSend && e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    sendMessage().catch((err) => alert(err.message));
+    sendMessage().catch((err) => toast(err.message));
   }
 });
 
 el.openSettingsBtn.addEventListener('click', () => { fillSettingsForm(); el.settingsDialog.showModal(); });
-el.settingsForm.addEventListener('submit', (e) => { e.preventDefault(); saveSettings().catch((err) => alert(err.message)); });
-el.refreshSessionBtn.addEventListener('click', () => refreshSession().catch((e) => alert(e.message)));
+el.settingsForm.addEventListener('submit', (e) => { e.preventDefault(); saveSettings().catch((err) => toast(err.message)); });
 
-el.registerBtn.addEventListener('click', () => registerLocal().catch((e) => alert(e.message)));
-el.loginBtn.addEventListener('click', () => loginLocal().catch((e) => alert(e.message)));
+el.cancelBtn.addEventListener('click', (e) => { e.preventDefault(); el.settingsDialog.close(); });
+el.refreshSessionBtn.addEventListener('click', () => refreshSession().catch((e) => toast(e.message)));
+
+el.registerBtn.addEventListener('click', () => registerLocal().catch((e) => toast(e.message)));
+el.loginBtn.addEventListener('click', () => loginLocal().catch((e) => toast(e.message)));
 el.socialLogoutBtn.addEventListener('click', async () => {
-  try { await api('/auth/logout', { method: 'POST' }); } catch {}
+  if (!state.demoMode) {
+    try { await api('/auth/logout', { method: 'POST' }); } catch {}
+  }
   state.user = null;
   state.chats = [];
   state.messagesByChat = {};
@@ -354,10 +487,9 @@ el.socialLogoutBtn.addEventListener('click', async () => {
 });
 
 el.facebookLoginBtn.addEventListener('click', startFacebookOAuth);
-el.vkLoginBtn.addEventListener('click', startVkOAuth);
-el.voiceCallBtn.addEventListener('click', () => { const c = currentChat(); if (!c) return; el.callTitle.textContent = 'Голосовой звонок'; el.callText.textContent = `${c.name} · Соединение...`; el.callAvatar.textContent = c.avatar || '👤'; el.callDialog.showModal(); });
-el.videoCallBtn.addEventListener('click', () => { const c = currentChat(); if (!c) return; el.callTitle.textContent = 'Видеозвонок'; el.callText.textContent = `${c.name} · Соединение...`; el.callAvatar.textContent = c.avatar || '👤'; el.callDialog.showModal(); });
-el.showStatsBtn.addEventListener('click', () => showChatStats().catch((e) => alert(e.message)));
+el.voiceCallBtn.addEventListener('click', () => { const c = currentChat(); if (!c) return toast('Выберите чат'); el.callTitle.textContent = 'Голосовой звонок'; el.callText.textContent = `${c.name} · Соединение...`; el.callAvatar.textContent = c.avatar || '👤'; el.callDialog.showModal(); });
+el.videoCallBtn.addEventListener('click', () => { const c = currentChat(); if (!c) return toast('Выберите чат'); el.callTitle.textContent = 'Видеозвонок'; el.callText.textContent = `${c.name} · Соединение...`; el.callAvatar.textContent = c.avatar || '👤'; el.callDialog.showModal(); });
+el.showStatsBtn.addEventListener('click', () => showChatStats().catch((e) => toast(e.message)));
 
 (async function bootstrap() {
   state.settings = mergeSettings(defaultSettings, JSON.parse(localStorage.getItem('nm-settings') || 'null') || {});

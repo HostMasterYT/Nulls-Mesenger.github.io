@@ -415,3 +415,23 @@ body.blur-previews .chat-item.active .preview {
   animation: none !important;
   transition: none !important;
 }
+
+.toast-msg {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%) translateY(16px);
+  background: rgba(10, 14, 24, 0.9);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  z-index: 2000;
+  opacity: 0;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.toast-msg.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

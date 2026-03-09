@@ -15,12 +15,9 @@ python3 -m http.server 4173
 ```bash
 cd server
 npm install
-FACEBOOK_APP_ID=... \
+FACEBOOK_APP_ID=1437460264576640 \
 FACEBOOK_APP_SECRET=... \
 FACEBOOK_REDIRECT_URI=http://localhost:8080/auth/facebook/callback \
-VK_CLIENT_ID=... \
-VK_CLIENT_SECRET=... \
-VK_REDIRECT_URI=http://localhost:8080/auth/vk/callback \
 FRONTEND_ORIGIN=http://localhost:4173 \
 FRONTEND_ORIGINS=http://localhost:4173,http://127.0.0.1:4173,http://0.0.0.0:4173 \
 SESSION_SECRET=replace_me \
@@ -42,11 +39,18 @@ npm start
   - `GET /chats/:chatId/messages?limit&before`
   - `GET /chats/:chatId/stats`
 
-## OAuth Facebook/VK
+
+## Режим устойчивости UI (если backend недоступен)
+
+Если API не поднят, фронтенд автоматически переключается в **demo mode**:
+- кнопки интерфейса продолжают работать,
+- можно открывать настройки, звонки-демо, статистику,
+- регистрация/логин/чаты работают локально в `localStorage` как оффлайн-демо.
+
+## OAuth Facebook
 
 - Facebook: `/auth/facebook/start` → официальный `facebook.com`
-- VK: `/auth/vk/start` → официальный `oauth.vk.com`
-- Статус провайдеров: `GET /auth/providers/status`
+- Статус Facebook провайдера: `GET /auth/providers/status`
 
 > Важно: зарегистрировать Facebook App может только владелец аккаунта в Meta Developers: <https://developers.facebook.com/>.
 
@@ -63,8 +67,6 @@ npm start
 - `GET /me`
 - `GET /auth/facebook/start`
 - `GET /auth/facebook/callback`
-- `GET /auth/vk/start`
-- `GET /auth/vk/callback`
 
 ### Настройки и безопасность
 - `GET /settings`
