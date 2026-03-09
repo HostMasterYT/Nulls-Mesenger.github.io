@@ -1,5 +1,6 @@
 const DEFAULT_LOCAL_API = 'http://localhost:8080';
 const AUTH_API_BASE = window.__AUTH_API_BASE__ || DEFAULT_LOCAL_API;
+const FACEBOOK_APP_ID = '1437460264576640';
 
 const state = {
   user: null,
@@ -7,9 +8,8 @@ const state = {
   activeChatId: null,
   messagesByChat: {},
   filter: '',
-  providers: { facebookConfigured: true },
+  providers: { facebookConfigured: false, appId: FACEBOOK_APP_ID },
   settings: null,
-  demoMode: false,
 };
 
 const defaultSettings = {
@@ -57,6 +57,7 @@ function toast(message) {
   requestAnimationFrame(() => node.classList.add('show'));
   setTimeout(() => { node.classList.remove('show'); setTimeout(() => node.remove(), 220); }, 2200);
 }
+
 function currentChat() { return state.chats.find((c) => c.id === state.activeChatId) || null; }
 function getSettings() {
   if (state.settings) return state.settings;
@@ -66,47 +67,20 @@ function getSettings() {
 }
 function saveSettingsLocal() { localStorage.setItem('nm-settings', JSON.stringify(getSettings())); }
 
-function seedDemoData() {
-  const existing = JSON.parse(localStorage.getItem('nm-demo-data') || 'null');
-  if (existing) return existing;
-  const now = Date.now();
-  const seeded = {
-    user: { id: 'demo-me', provider: 'Demo', name: 'Demo User', phone: '+70000000000', email: 'demo@local' },
-    chats: [
-      { id: 'demo-chat-1', name: 'Alice', avatar: '🧑‍💻', participants: ['demo-me', 'alice'], messages: [{ id: 'm1', userId: 'alice', text: 'Привет! Это оффлайн-демо.', createdAt: now - 60000 }] },
-      { id: 'demo-chat-2', name: 'Bob', avatar: '🎨', participants: ['demo-me', 'bob'], messages: [{ id: 'm2', userId: 'demo-me', text: 'Тут всё работает без backend.', createdAt: now - 30000 }] },
-    ],
-  };
-  localStorage.setItem('nm-demo-data', JSON.stringify(seeded));
-  return seeded;
-}
-function readDemoData() { return seedDemoData(); }
-function writeDemoData(data) { localStorage.setItem('nm-demo-data', JSON.stringify(data)); }
-
-function enterDemoMode(reason = '') {
-  if (!state.demoMode) toast(`Backend недоступен. Включен demo mode.${reason ? `\n${reason}` : ''}`);
-  state.demoMode = true;
-  el.apiMetaStatus.textContent = 'API metadata: demo mode';
-  el.oauthProviderStatus.textContent = 'Facebook OAuth: unavailable in demo mode';
-  const d = readDemoData();
-  state.user = d.user;
-  state.chats = d.chats.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, lastMessage: c.messages.at(-1)?.text || '', updatedAt: c.messages.at(-1)?.createdAt || Date.now(), unreadCount: 0 }));
-  if (!state.activeChatId && state.chats.length) state.activeChatId = state.chats[0].id;
-  state.messagesByChat = {};
-  d.chats.forEach((chat) => {
-    state.messagesByChat[chat.id] = chat.messages.map((m) => ({ id: m.id, text: m.text, createdAt: m.createdAt, from: m.userId === d.user.id ? 'me' : 'them' }));
-  });
-}
-
 async function api(url, options = {}) {
-  const response = await fetch(`${AUTH_API_BASE}${url}`, {
-    credentials: 'include',
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(json.error || 'api_error');
-  return json;
+  try {
+    const response = await fetch(`${AUTH_API_BASE}${url}`, {
+      credentials: 'include',
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.error || 'api_error');
+    return json;
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error(`network_error: backend недоступен по ${AUTH_API_BASE}`);
+    throw error;
+  }
 }
 
 function applyThemeFromSettings() {
@@ -125,25 +99,21 @@ function applyThemeFromSettings() {
 
 function renderAuth() {
   const s = getSettings();
-  let label = state.demoMode ? 'Demo mode (offline)' : 'Не авторизованы';
+  let label = 'Не авторизованы';
   if (state.user) {
     label = `${state.user.provider || 'Local'}: ${state.user.name}`;
     if (!s.privacy.hidePhone && state.user.phone) label += ` · ${state.user.phone}`;
   }
   el.authState.textContent = label;
   el.socialLogoutBtn.disabled = !state.user;
-  el.authHint.textContent = state.demoMode
-    ? 'Demo mode: кнопки работают локально, без backend.'
-    : 'Локальный вход + Facebook OAuth.';
+  el.authHint.textContent = 'Локальный вход + Facebook OAuth.';
 }
 
 function renderProviderStatus() {
-  if (state.demoMode) {
-    el.oauthProviderStatus.textContent = 'Facebook OAuth: unavailable in demo mode';
-    el.facebookLoginBtn.disabled = true;
-        return;
-  }
-  el.oauthProviderStatus.textContent = `${state.providers.facebookConfigured ? 'Facebook OAuth: OK' : 'Facebook OAuth: OFF'}`;
+  const appId = state.providers.appId || FACEBOOK_APP_ID;
+  el.oauthProviderStatus.textContent = state.providers.facebookConfigured
+    ? `Facebook OAuth: OK (App ID: ${appId})`
+    : `Facebook OAuth: OFF (App ID: ${appId})`;
   el.facebookLoginBtn.disabled = !state.providers.facebookConfigured;
 }
 
@@ -222,46 +192,47 @@ function readSettingsForm() {
 }
 
 async function fetchProviderStatus() {
-  if (state.demoMode) return;
   try {
     const data = await api('/auth/providers/status', { method: 'GET' });
-    state.providers = { facebookConfigured: !!data.facebook?.configured };
+    state.providers = {
+      facebookConfigured: !!data.facebook?.configured,
+      appId: data.facebook?.appId || FACEBOOK_APP_ID,
+    };
   } catch {
-    enterDemoMode('Не удалось получить статус OAuth провайдеров.');
+    state.providers = { facebookConfigured: false, appId: FACEBOOK_APP_ID };
+    toast(`Не удалось получить статус OAuth. Проверь backend: ${AUTH_API_BASE}`);
   }
 }
 
 async function fetchApiMeta() {
-  if (state.demoMode) return;
   try {
     const meta = await api('/api/meta', { method: 'GET' });
     el.apiMetaStatus.textContent = `API ${meta.version}: ${meta.endpoints.length} endpoints`;
   } catch {
-    enterDemoMode('Не удалось получить API metadata.');
+    el.apiMetaStatus.textContent = `API metadata: unavailable (${AUTH_API_BASE})`;
   }
 }
 
 async function fetchSessionUser() {
-  if (state.demoMode) return;
   try {
     const me = await api('/me', { method: 'GET' });
     state.user = me.user || null;
     state.settings = mergeSettings(defaultSettings, me.user?.settings || {});
     saveSettingsLocal();
     await loadChats();
-  } catch (error) {
-    if (String(error.message || '').includes('network')) enterDemoMode('Backend недоступен по сети.');
-    else state.user = null;
+  } catch {
+    state.user = null;
+    state.chats = [];
+    state.messagesByChat = {};
+    state.activeChatId = null;
   }
 }
 
 async function syncSettingsFromServer() {
-  if (!state.user || state.demoMode) return;
-  try {
-    const data = await api('/settings', { method: 'GET' });
-    state.settings = mergeSettings(defaultSettings, data.settings || {});
-    saveSettingsLocal();
-  } catch {}
+  if (!state.user) return;
+  const data = await api('/settings', { method: 'GET' });
+  state.settings = mergeSettings(defaultSettings, data.settings || {});
+  saveSettingsLocal();
 }
 
 async function saveSettings() {
@@ -270,79 +241,34 @@ async function saveSettings() {
   saveSettingsLocal();
   applyThemeFromSettings();
   renderAll();
-  if (state.user && !state.demoMode) {
+  if (state.user) {
     const data = await api('/settings', { method: 'PUT', body: JSON.stringify({ settings: newSettings }) });
     state.user = data.user || state.user;
   }
 }
 
-function reloadDemoStateFromStorage() { enterDemoMode(); }
-
 async function registerLocal() {
   const payload = { username: el.localUsername.value.trim(), phone: el.localPhone.value.trim(), email: el.localEmail.value.trim(), password: el.localPassword.value.trim() };
   if (!payload.username || !payload.phone || !payload.password) return toast('Заполни username, phone, password');
-  if (state.demoMode) {
-    const d = readDemoData();
-    d.user = { id: 'demo-me', provider: 'Demo', name: payload.username, phone: payload.phone, email: payload.email || '' };
-    writeDemoData(d);
-    reloadDemoStateFromStorage();
-    renderAll();
-    return;
-  }
-  try {
-    const data = await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
-    state.user = data.user;
-    state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
-    await loadChats();
-    renderAll();
-  } catch (error) {
-    if (String(error.message || '').includes('network')) {
-      enterDemoMode('Регистрация переключена на оффлайн demo.');
-      await registerLocal();
-      return;
-    }
-    throw error;
-  }
+  const data = await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+  state.user = data.user;
+  state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
+  await loadChats();
+  renderAll();
 }
 
 async function loginLocal() {
   const payload = { username: el.localUsername.value.trim(), phone: el.localPhone.value.trim(), email: el.localEmail.value.trim(), password: el.localPassword.value.trim() };
   if (!payload.password || (!payload.phone && !payload.email && !payload.username)) return toast('Нужны login и password');
-  if (state.demoMode) {
-    const d = readDemoData();
-    if (payload.username) d.user.name = payload.username;
-    if (payload.phone) d.user.phone = payload.phone;
-    if (payload.email) d.user.email = payload.email;
-    writeDemoData(d);
-    reloadDemoStateFromStorage();
-    renderAll();
-    return;
-  }
-  try {
-    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
-    state.user = data.user;
-    state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
-    await loadChats();
-    renderAll();
-  } catch (error) {
-    if (String(error.message || '').includes('network')) {
-      enterDemoMode('Логин переключен на оффлайн demo.');
-      await loginLocal();
-      return;
-    }
-    throw error;
-  }
+  const data = await api('/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+  state.user = data.user;
+  state.settings = mergeSettings(defaultSettings, data.user?.settings || {});
+  await loadChats();
+  renderAll();
 }
 
 async function loadChats() {
   if (!state.user) return;
-  if (state.demoMode) {
-    const d = readDemoData();
-    state.chats = d.chats.map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, lastMessage: c.messages.at(-1)?.text || '', updatedAt: c.messages.at(-1)?.createdAt || Date.now(), unreadCount: 0 }));
-    if (!state.activeChatId && state.chats.length) state.activeChatId = state.chats[0].id;
-    if (state.activeChatId) await loadMessages(state.activeChatId);
-    return;
-  }
   const data = await api('/chats', { method: 'GET' });
   state.chats = data.chats || [];
   if (!state.activeChatId && state.chats.length) state.activeChatId = state.chats[0].id;
@@ -350,12 +276,6 @@ async function loadChats() {
 }
 
 async function loadMessages(chatId) {
-  if (state.demoMode) {
-    const d = readDemoData();
-    const chat = d.chats.find((c) => c.id === chatId);
-    state.messagesByChat[chatId] = (chat?.messages || []).map((m) => ({ id: m.id, text: m.text, createdAt: m.createdAt, from: m.userId === d.user.id ? 'me' : 'them' }));
-    return;
-  }
   const data = await api(`/chats/${chatId}/messages?limit=100`, { method: 'GET' });
   state.messagesByChat[chatId] = data.messages || [];
 }
@@ -364,19 +284,7 @@ async function sendMessage() {
   const text = el.messageInput.value.trim();
   if (!text) return;
   const c = currentChat();
-  if (!c) return;
-  if (state.demoMode) {
-    const d = readDemoData();
-    const chat = d.chats.find((x) => x.id === c.id);
-    if (!chat) return;
-    chat.messages.push({ id: cryptoRandom(), userId: d.user.id, text, createdAt: Date.now() });
-    writeDemoData(d);
-    el.messageInput.value = '';
-    await loadChats();
-    await loadMessages(c.id);
-    renderAll();
-    return;
-  }
+  if (!c) return toast('Выберите чат');
   await api(`/chats/${c.id}/messages`, { method: 'POST', body: JSON.stringify({ text }) });
   el.messageInput.value = '';
   await loadChats();
@@ -384,22 +292,9 @@ async function sendMessage() {
   renderAll();
 }
 
-function cryptoRandom() { return Math.random().toString(16).slice(2) + Date.now().toString(16); }
-
 async function startChatByPhone() {
   const phone = prompt('Введите номер друга:');
   if (!phone) return;
-  if (state.demoMode) {
-    const d = readDemoData();
-    const id = `demo-chat-${cryptoRandom()}`;
-    d.chats.unshift({ id, name: `User ${phone.slice(-4)}`, avatar: '👤', participants: ['demo-me', phone], messages: [] });
-    writeDemoData(d);
-    await loadChats();
-    state.activeChatId = id;
-    await loadMessages(id);
-    renderAll();
-    return;
-  }
   const data = await api('/chats/by-phone', { method: 'POST', body: JSON.stringify({ phone }) });
   await loadChats();
   state.activeChatId = data.chat.id;
@@ -410,36 +305,22 @@ async function startChatByPhone() {
 async function showChatStats() {
   const c = currentChat();
   if (!c) return toast('Сначала выберите чат');
-  if (state.demoMode) {
-    const messages = state.messagesByChat[c.id] || [];
-    const myMessages = messages.filter((m) => m.from === 'me').length;
-    const stats = {
-      totalMessages: messages.length,
-      myMessages,
-      theirMessages: messages.length - myMessages,
-      firstMessageAt: messages[0]?.createdAt || null,
-      lastMessageAt: messages.at(-1)?.createdAt || null,
-    };
-    el.chatStatsOutput.textContent = JSON.stringify(stats, null, 2);
-    el.statsDialog.showModal();
-    return;
-  }
   const data = await api(`/chats/${c.id}/stats`, { method: 'GET' });
   el.chatStatsOutput.textContent = JSON.stringify(data.stats || {}, null, 2);
   el.statsDialog.showModal();
 }
 
 async function refreshSession() {
-  if (state.demoMode) return toast('Demo mode: сессия локальная, refresh не требуется.');
   await api('/security/sessions/refresh', { method: 'POST' });
   toast('Сессия обновлена');
 }
 
 function startFacebookOAuth() {
-  if (state.demoMode) return toast('OAuth недоступен в demo mode');
+  if (!state.providers.facebookConfigured) return toast('Facebook OAuth не настроен на сервере');
   const returnTo = `${window.location.origin}${window.location.pathname}`;
   window.location.href = `${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`;
 }
+
 function renderAll() {
   applyThemeFromSettings();
   renderProviderStatus();
@@ -470,19 +351,17 @@ el.messageInput.addEventListener('keydown', (e) => {
 
 el.openSettingsBtn.addEventListener('click', () => { fillSettingsForm(); el.settingsDialog.showModal(); });
 el.settingsForm.addEventListener('submit', (e) => { e.preventDefault(); saveSettings().catch((err) => toast(err.message)); });
-
 el.cancelBtn.addEventListener('click', (e) => { e.preventDefault(); el.settingsDialog.close(); });
 el.refreshSessionBtn.addEventListener('click', () => refreshSession().catch((e) => toast(e.message)));
 
 el.registerBtn.addEventListener('click', () => registerLocal().catch((e) => toast(e.message)));
 el.loginBtn.addEventListener('click', () => loginLocal().catch((e) => toast(e.message)));
 el.socialLogoutBtn.addEventListener('click', async () => {
-  if (!state.demoMode) {
-    try { await api('/auth/logout', { method: 'POST' }); } catch {}
-  }
+  try { await api('/auth/logout', { method: 'POST' }); } catch {}
   state.user = null;
   state.chats = [];
   state.messagesByChat = {};
+  state.activeChatId = null;
   renderAll();
 });
 
@@ -497,6 +376,6 @@ el.showStatsBtn.addEventListener('click', () => showChatStats().catch((e) => toa
   await fetchProviderStatus();
   await fetchApiMeta();
   await fetchSessionUser();
-  await syncSettingsFromServer();
+  try { await syncSettingsFromServer(); } catch {}
   renderAll();
 })();
