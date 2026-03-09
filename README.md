@@ -54,15 +54,15 @@ npm start
 > Важно: зарегистрировать Facebook App может только владелец аккаунта в Meta Developers: <https://developers.facebook.com/>.
 
 
-### Facebook SDK на фронтенде
+### Facebook вход (без JSSDK кнопки)
 
-Во фронтенд добавлены:
-- загрузка `https://connect.facebook.net/en_US/sdk.js`,
-- `FB.init` с `appId: 1437460264576640`,
-- `FB.getLoginStatus` и обработчик `statusChangeCallback`,
-- `<fb:login-button ... onlogin="checkLoginState();">`.
+В приложении используется серверный OAuth-редирект через кнопку `Facebook`:
+- UI переводит на `GET /auth/facebook/start`,
+- сервер перенаправляет на Facebook и после callback создаёт backend-сессию.
 
-При статусе `connected` UI запускает серверный OAuth flow (`/auth/facebook/start`) для полной синхронизации сессии и данных на backend.
+Если в кабинете Meta вы видите сообщение *"Вход через JSSDK отключен"*,
+включите параметр **"Вход с SDK JavaScript"** в developers.facebook.com.
+Это не требуется для текущего redirect-flow, но необходимо именно для `<fb:login-button>` сценариев.
 
 ## API
 
