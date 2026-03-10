@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="fb-root"></div>
     <div class="app" id="app">
       <aside class="sidebar glass">
         <header class="sidebar__header">
@@ -144,6 +145,27 @@
         <menu class="modal__actions"><button id="endCallBtn" value="cancel" class="danger">Завершить</button></menu>
       </form>
     </dialog>
+
+    <script>
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId: '1437460264576640',
+          cookie: true,
+          xfbml: true,
+          version: 'v23.0'
+        });
+
+        FB.AppEvents.logPageView();
+      };
+
+      (function(d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        fjs.parentNode.insertBefore(js, fjs);
+      }(document, 'script', 'facebook-jssdk'));
+    </script>
     <script src="app.js"></script>
   </body>
 </html>
