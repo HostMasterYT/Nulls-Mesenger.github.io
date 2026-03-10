@@ -31,8 +31,10 @@
             </div>
           </div>
           <div class="social-grid">
-            <button id="facebookLoginBtn" class="social-btn social-btn--facebook" type="button">Facebook</button>
+            <button id="facebookLoginBtn" class="social-btn social-btn--facebook" type="button">Facebook Redirect</button>
           </div>
+          <fb:login-button scope="public_profile,email" onlogin="checkLoginState();"></fb:login-button>
+          <small id="fbStatus" class="provider-status">Facebook SDK: checking...</small>
           <small id="oauthProviderStatus" class="provider-status">Проверка OAuth-провайдеров...</small>
           <small id="apiMetaStatus" class="provider-status">API metadata: loading...</small>
           <div class="auth-actions"><button id="socialLogoutBtn" class="ghost small" type="button">Выйти</button></div>
@@ -145,27 +147,25 @@
         <menu class="modal__actions"><button id="endCallBtn" value="cancel" class="danger">Завершить</button></menu>
       </form>
     </dialog>
-
     <script>
       window.fbAsyncInit = function() {
         FB.init({
           appId: '1437460264576640',
           cookie: true,
           xfbml: true,
-          version: 'v23.0'
+          version: 'v25.0'
         });
 
         FB.AppEvents.logPageView();
-      };
 
-      (function(d, s, id) {
-        var js, fjs = d.getElementsByTagName(s)[0];
-        if (d.getElementById(id)) return;
-        js = d.createElement(s); js.id = id;
-        js.src = 'https://connect.facebook.net/en_US/sdk.js';
-        fjs.parentNode.insertBefore(js, fjs);
-      }(document, 'script', 'facebook-jssdk'));
+        FB.getLoginStatus(function(response) {
+          if (window.statusChangeCallback) {
+            window.statusChangeCallback(response, { auto: true });
+          }
+        });
+      };
     </script>
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

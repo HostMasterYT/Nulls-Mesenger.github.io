@@ -64,6 +64,22 @@ npm start
 включите параметр **"Вход с SDK JavaScript"** в developers.facebook.com.
 Это не требуется для текущего redirect-flow, но необходимо именно для `<fb:login-button>` сценариев.
 
+
+### Автопоиск backend API
+
+Если `window.__AUTH_API_BASE__` не задан или API недоступен, фронтенд теперь пробует несколько адресов backend (`localhost/127.0.0.1:8080` и текущий host:8080) и показывает список проверенных адресов в статусе `API metadata`.
+
+
+### Facebook JavaScript SDK Login
+
+На странице подключен JS SDK входа через Facebook с ID приложения `1437460264576640`:
+- `FB.init({ appId: '1437460264576640', cookie: true, xfbml: true, version: 'v25.0' })`
+- `FB.getLoginStatus(...)`
+- `<fb:login-button scope="public_profile,email" onlogin="checkLoginState();">`
+- при статусе `connected` запускается серверный OAuth redirect для синхронизации backend-сессии.
+
+Если в Meta показано «Вход через JSSDK отключен», включите параметр **«Вход с помощью SDK для JavaScript»** и добавьте корректные домены/redirect URI в developers.facebook.com.
+
 ## API
 
 ### Системные

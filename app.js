@@ -1,5 +1,5 @@
 const DEFAULT_LOCAL_API = 'http://localhost:8080';
-const AUTH_API_BASE = window.__AUTH_API_BASE__ || DEFAULT_LOCAL_API;
+const AUTH_API_BASE_SEED = window.__AUTH_API_BASE__ || DEFAULT_LOCAL_API;
 const FACEBOOK_APP_ID = '1437460264576640';
 
 const state = {
@@ -10,6 +10,8 @@ const state = {
   filter: '',
   providers: { facebookConfigured: false, appId: FACEBOOK_APP_ID },
   settings: null,
+  apiBase: AUTH_API_BASE_SEED,
+  apiCandidatesTried: [],
 };
 
 const defaultSettings = {
@@ -32,7 +34,7 @@ const el = [
   'chatEnterToSend','chatAutoMedia','chatStickers','chatReactions','chatSpellcheck',
   'voiceCallBtn','videoCallBtn','showStatsBtn','statsDialog','chatStatsOutput','refreshSessionBtn',
   'callDialog','callTitle','callText','callAvatar','newChatBtn','authState','facebookLoginBtn','socialLogoutBtn',
-  'sendBtn','cancelBtn','localUsername','localPhone','localPassword','registerBtn','loginBtn','localEmail','oauthProviderStatus','apiMetaStatus','authHint'
+  'sendBtn','cancelBtn','localUsername','localPhone','localPassword','registerBtn','loginBtn','localEmail','oauthProviderStatus','apiMetaStatus','authHint','fbStatus'
 ].reduce((a, k) => (a[k] = $(k), a), {});
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -67,18 +69,52 @@ function getSettings() {
 }
 function saveSettingsLocal() { localStorage.setItem('nm-settings', JSON.stringify(getSettings())); }
 
+const backendCandidates = (() => {
+  const host = window.location.hostname || 'localhost';
+  const set = new Set([
+    AUTH_API_BASE_SEED,
+    DEFAULT_LOCAL_API,
+    'http://127.0.0.1:8080',
+    'http://localhost:8080',
+    `http://${host}:8080`,
+  ]);
+  return [...set].filter(Boolean);
+})();
+
+async function fetchJsonFromBase(base, url, options = {}) {
+  const response = await fetch(`${base}${url}`, {
+    credentials: 'include',
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(json.error || 'api_error');
+  return json;
+}
+
+async function discoverBackendBase() {
+  for (const candidate of backendCandidates) {
+    try {
+      const meta = await fetchJsonFromBase(candidate, '/api/meta', { method: 'GET' });
+      state.apiBase = candidate;
+      state.apiCandidatesTried = [candidate];
+      el.apiMetaStatus.textContent = `API ${meta.version}: ${meta.endpoints.length} endpoints`;
+      return candidate;
+    } catch {
+      state.apiCandidatesTried.push(candidate);
+    }
+  }
+  throw new Error(`network_error: backend metadata недоступна (${backendCandidates.join(', ')})`);
+}
+
 async function api(url, options = {}) {
   try {
-    const response = await fetch(`${AUTH_API_BASE}${url}`, {
-      credentials: 'include',
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(json.error || 'api_error');
-    return json;
+    const base = state.apiBase || await discoverBackendBase();
+    return await fetchJsonFromBase(base, url, options);
   } catch (error) {
-    if (error instanceof TypeError) throw new Error(`network_error: backend недоступен по ${AUTH_API_BASE}`);
+    if (error instanceof TypeError || String(error.message || '').includes('network_error')) {
+      throw new Error(`network_error: backend недоступен (${state.apiBase || AUTH_API_BASE_SEED})`);
+    }
     throw error;
   }
 }
@@ -200,16 +236,18 @@ async function fetchProviderStatus() {
     };
   } catch {
     state.providers = { facebookConfigured: false, appId: FACEBOOK_APP_ID };
-    toast(`Не удалось получить статус OAuth. Проверь backend: ${AUTH_API_BASE}`);
+    toast(`Не удалось получить статус OAuth. Проверь backend: ${state.apiBase || AUTH_API_BASE_SEED}`);
   }
 }
 
 async function fetchApiMeta() {
   try {
-    const meta = await api('/api/meta', { method: 'GET' });
-    el.apiMetaStatus.textContent = `API ${meta.version}: ${meta.endpoints.length} endpoints`;
+    const base = state.apiBase || await discoverBackendBase();
+    const meta = await fetchJsonFromBase(base, '/api/meta', { method: 'GET' });
+    el.apiMetaStatus.textContent = `API ${meta.version}: ${meta.endpoints.length} endpoints · ${base}`;
   } catch {
-    el.apiMetaStatus.textContent = `API metadata: unavailable (${AUTH_API_BASE})`;
+    const tried = state.apiCandidatesTried.length ? state.apiCandidatesTried.join(', ') : backendCandidates.join(', ');
+    el.apiMetaStatus.textContent = `API metadata: unavailable (tried: ${tried})`;
   }
 }
 
@@ -316,10 +354,60 @@ async function refreshSession() {
 }
 
 
+window.__fbLoginTriggeredByButton = false;
+
+window.statusChangeCallback = function statusChangeCallback(response, options = {}) {
+  if (!el.fbStatus) return;
+  if (!response || !response.status) {
+    el.fbStatus.textContent = 'Facebook SDK: unknown status';
+    return;
+  }
+
+  if (response.status === 'connected') {
+    el.fbStatus.textContent = 'Facebook SDK: connected';
+    if (window.FB) {
+      window.FB.api('/me', { fields: 'name,email' }, function(profileResponse) {
+        if (profileResponse && !profileResponse.error) {
+          el.fbStatus.textContent = `Facebook SDK: connected as ${profileResponse.name}${profileResponse.email ? ` (${profileResponse.email})` : ''}`;
+        }
+      });
+    }
+    if (window.__fbLoginTriggeredByButton && !options.auto) {
+      window.__fbLoginTriggeredByButton = false;
+      startFacebookOAuth();
+    }
+    return;
+  }
+
+  if (response.status === 'not_authorized') {
+    el.fbStatus.textContent = 'Facebook SDK: user logged in Facebook, but not authorized app';
+    return;
+  }
+
+  el.fbStatus.textContent = 'Facebook SDK: user is not logged in Facebook';
+};
+
+window.checkLoginState = function checkLoginState() {
+  window.__fbLoginTriggeredByButton = true;
+  if (!window.FB) {
+    toast('Facebook SDK не загрузился.');
+    return;
+  }
+  window.FB.getLoginStatus(function(response) {
+    window.statusChangeCallback(response);
+    if (response.status !== 'connected') {
+      window.FB.login(function(loginResponse) {
+        window.statusChangeCallback(loginResponse);
+      }, { scope: 'public_profile,email' });
+    }
+  });
+};
+
 function startFacebookOAuth() {
   if (!state.providers.facebookConfigured) return toast('Facebook OAuth не настроен на сервере');
   const returnTo = `${window.location.origin}${window.location.pathname}`;
-  window.location.href = `${AUTH_API_BASE}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`;
+  const base = state.apiBase || AUTH_API_BASE_SEED;
+  window.location.href = `${base}/auth/facebook/start?return_to=${encodeURIComponent(returnTo)}`;
 }
 
 function renderAll() {
